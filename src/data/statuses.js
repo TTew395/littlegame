@@ -1,6 +1,7 @@
+name=statuses_2.js
 /**
  * Status Effect Definitions (Buffs, Debuffs, Stacking, Non-Stacking, Turn-based & Event-based)
- * Emoji-free tactical abbreviations.
+ * Emoji-free tactical abbreviations. Includes expanded debuff registry.
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -17,7 +18,7 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Disables all passive abilities and species traits while active.",
+    description: "Blocks character abilities and species traits while active.",
     flags: { blockPassives: true },
   },
   {
@@ -28,7 +29,7 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Seals item effects, bonus Turn Meter gains, and secondary triggers.",
+    description: "Blocks stat buffs or bonuses given by items, bonus Turn Meter gains, and secondary triggers.",
     flags: { sealItems: true, blockBonusTurnMeter: true },
   },
   {
@@ -39,8 +40,19 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Increases incoming damage taken by 25% and marks the target for execution.",
-    statModifiers: { incomingDamageMultiplier: 1.25 },
+    description: "Characters killed under a Deathbrand debuff will have a Block Revive debuff placed on them.",
+  },
+  {
+    id: "block_revive",
+    name: "Block Revive",
+    icon: "BLK-REV",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "NEVER",
+    isProtectedByDefault: true,
+    description: "Characters under this debuff cannot be revived. Cannot be resisted, blocked, or removed. Permanent duration unless stated otherwise.",
+    flags: { blockRevive: true },
   },
   {
     id: "stun",
@@ -50,7 +62,7 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Unable to act for the turn. Cooldowns do not tick while Stunned.",
+    description: "Opponent's turn is skipped. Cooldowns do not tick while Stunned.",
     flags: { skipTurn: true },
   },
   {
@@ -61,8 +73,12 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Skips turn unless woken up by direct damage.",
+    description: "Prevents the opponent from using their turn. Dispelled if hit by an attack. Opponents gain +25 Energy each turn asleep.",
     flags: { skipTurn: true, removeOnDamage: true },
+    onTurnStart({ unit, engine }) {
+      unit.currentEnergy = Math.min(unit.maxEnergy, unit.currentEnergy + 25);
+      engine.log(`[Sleep] ${unit.name} gains 25 Energy while asleep.`, "info");
+    },
   },
   {
     id: "freeze",
@@ -77,6 +93,18 @@ export const STATUS_LIST = [
     statModifiers: { incomingDamageMultiplier: 0.8 },
   },
   {
+    id: "frozen",
+    name: "Frozen",
+    icon: "FRZN",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_START",
+    description: "Opponent's speed is reduced to zero. Opponent cannot do anything.",
+    flags: { skipTurn: true },
+    statModifiers: { spdMultiplier: 0 },
+  },
+  {
     id: "heart_melt",
     name: "Heart-Melt",
     icon: "H-MELT",
@@ -84,8 +112,9 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Reduces Defense by 30% and healing received by 50%.",
-    statModifiers: { defMultiplier: 0.7 },
+    immunities: ["Chaos", "Dark", "Death"],
+    description: "Opponent cannot use damaging moves for the next turn. Chaos, Dark, and Death types are immune.",
+    flags: { blockDamagingMoves: true },
   },
   {
     id: "def_down",
@@ -129,7 +158,7 @@ export const STATUS_LIST = [
     maxStacks: 1,
     tickTiming: "TURN_END",
     isProtectedByDefault: true,
-    description: "Cursed by Hex. Vulnerable to Ternax Hellfire's Lethal Lava, Molten Slag, and Hexreaper.",
+    description: "Targets under [Hex] take 10% of single-target damage done to allies and 2% of AOE damage done to allies.",
   },
   {
     id: "extrapolation_link",
@@ -143,8 +172,6 @@ export const STATUS_LIST = [
     description: "Energy costs reduced to 0. Using any move besides Rest or Wait triggers massive temporal backlash damage.",
     flags: { zeroEnergyCost: true },
   },
-
-  // Debt-Bearer Alnith Random Debuffs & Item Debuffs
   {
     id: "poison_dot",
     name: "Poison",
@@ -153,7 +180,15 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Deals 4% of Max HP damage at the start of the turn.",
+    description: "Damages the opponent by 5% of their HP each turn. Cannot kill.",
+    onTurnStart({ unit, engine }) {
+      const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.05));
+      if (unit.currentHp > dmg) {
+        engine.dealTrueDamage(unit, dmg, "Poison");
+      } else if (unit.currentHp > 1) {
+        engine.dealTrueDamage(unit, unit.currentHp - 1, "Poison (Cannot Kill)");
+      }
+    },
   },
   {
     id: "hemorrhage",
@@ -173,8 +208,8 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
-    description: "Corrodes armor (-20% DEF) and deals 3% Max HP damage at the start of the turn.",
+    tickTiming: "TURN_END",
+    description: "Damages opponent by 5 HP each turn if hit with a Water type move (includes status moves). Corrodes armor (-20% DEF).",
     statModifiers: { defMultiplier: 0.8 },
   },
   {
@@ -184,9 +219,12 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Reduces Speed by 15% and Accuracy by 15%.",
-    statModifiers: { spdMultiplier: 0.85 },
+    tickTiming: "TURN_START",
+    description: "Lowers the opponent's Defense by 1 each turn.",
+    onTurnStart({ unit, engine }) {
+      unit.baseStats.def = Math.max(0, unit.baseStats.def - 1);
+      engine.log(`[Windstruck] ${unit.name}'s Defense reduced by 1.`, "status");
+    },
   },
   {
     id: "decay",
@@ -196,18 +234,8 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Deals 5% of Max HP damage at the start of the turn.",
-  },
-  {
-    id: "brittle",
-    name: "Brittle",
-    icon: "BRIT",
-    category: "debuff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Increases incoming damage taken by 20%.",
-    statModifiers: { incomingDamageMultiplier: 1.2 },
+    description: "Reduces Attack and Defense by 10%, making target more vulnerable to types they usually resist.",
+    statModifiers: { atkMultiplier: 0.9, defMultiplier: 0.9 },
   },
   {
     id: "blindness",
@@ -216,10 +244,11 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_END",
-    isProtectedByDefault: true,
-    description: "Reduces accuracy by 40%.",
-    statModifiers: { accuracyPenalty: 40 },
+    tickTiming: "TURN_START",
+    description: "Lowers accuracy of opponent by 6% each turn.",
+    onTurnStart({ unit }) {
+      unit.customCounters.accuracyPenalty = (unit.customCounters.accuracyPenalty || 0) + 6;
+    },
   },
   {
     id: "ranged_only_lock",
@@ -231,6 +260,313 @@ export const STATUS_LIST = [
     tickTiming: "TURN_END",
     description: "Knocked back by Test's Hammer: can only use and be hit by Ranged moves.",
     flags: { rangedOnly: true },
+  },
+
+  // ==========================================
+  // NEW ADDED DEBUFFS
+  // ==========================================
+  {
+    id: "dance",
+    name: "Dance",
+    icon: "DANCE",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_END",
+    description: "Opponent gains 75% less accuracy on attacks, attacks cost 10 more energy to use. Lasts 3 turns.",
+    statModifiers: { accuracyPenalty: 75, energyCostIncrease: 10 },
+  },
+  {
+    id: "bamboozled",
+    name: "Bamboozled",
+    icon: "BAMBZ",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_END",
+    description: "Next 3 attacks have -25% accuracy and -20 speed.",
+    statModifiers: { accuracyPenalty: 25, spd: -20 },
+  },
+  {
+    id: "irradiated",
+    name: "Irradiated",
+    icon: "RAD",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_END",
+    immunities: ["Light", "Dragon", "Space", "Time", "Chaos"],
+    description: "Take double damage and have -15 speed for 3 turns. Light, Dragon, Space, Time, and Chaos types are immune.",
+    statModifiers: { incomingDamageMultiplier: 2.0, spd: -15 },
+  },
+  {
+    id: "heal_reduction",
+    name: "Heal Reduction",
+    icon: "-HEAL",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Reduces healing received by this character.",
+    statModifiers: { healReceivedMultiplier: 0.5 },
+  },
+  {
+    id: "gauss",
+    name: "Gauss",
+    icon: "GAUSS",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_START",
+    description: "Defense is reduced by 10, and takes 10 damage every turn. Does not stack.",
+    statModifiers: { def: -10 },
+    onTurnStart({ unit, engine }) {
+      engine.dealTrueDamage(unit, 10, "Gauss Damage");
+    },
+  },
+  {
+    id: "inked",
+    name: "Inked",
+    icon: "INK",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Accuracy is reduced by 10% and speed is reduced by 15.",
+    statModifiers: { accuracyPenalty: 10, spd: -15 },
+  },
+  {
+    id: "hallucination",
+    name: "Hallucination",
+    icon: "HALLU",
+    category: "debuff",
+    stackBehavior: "stack",
+    maxStacks: 3,
+    tickTiming: "NEVER",
+    description: "Can stack up to 3 times. Each stack lowers accuracy and evasion by 10%. Ends after getting hit.",
+    onAfterTakeDamage({ defender, engine }) {
+      engine.statusManager.removeStatus(defender, "hallucination", { forceProtected: true });
+      engine.log(`[Hallucination] Cleared from ${defender.name} after taking damage.`, "status");
+    },
+  },
+  {
+    id: "unbalanced",
+    name: "Unbalanced",
+    icon: "UNBAL",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Lowers accuracy by 40%.",
+    statModifiers: { accuracyPenalty: 40 },
+  },
+  {
+    id: "gravity",
+    name: "Gravity",
+    icon: "GRAV",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Makes Flying types/Levitate users take hits from Ground types and ground hazards.",
+    flags: { grounded: true },
+  },
+  {
+    id: "guied",
+    name: "GUIED",
+    icon: "GUIED",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Lowers accuracy by 25% and speed by 20%.",
+    statModifiers: { accuracyPenalty: 25, spdMultiplier: 0.8 },
+  },
+  {
+    id: "drunk",
+    name: "Drunk",
+    icon: "DRUNK",
+    category: "debuff",
+    stackBehavior: "stack",
+    maxStacks: 100,
+    tickTiming: "NEVER",
+    description: "Stackable debuff. Lowers accuracy by 0.5% per stack (up to -50% accuracy at 100 stacks). Passing out at 100 stacks causes 3-turn skip and converts into Hangover.",
+    onStackAdded({ unit, stacks, engine }) {
+      if (stacks >= 100) {
+        engine.statusManager.removeStatus(unit, "drunk", { forceProtected: true });
+        engine.statusManager.applyStatus(unit, unit, "stun", { duration: 3 });
+        engine.statusManager.applyStatus(unit, unit, "hangover", { duration: 3 });
+        engine.log(`[Drunk] ${unit.name} passed out from 100 stacks! Stunned for 3 turns and inflicted with Hangover.`, "crit");
+      }
+    },
+  },
+  {
+    id: "hangover",
+    name: "Hangover",
+    icon: "HNGOVR",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_END",
+    description: "Reduces speed, energy, and accuracy by 25.",
+    statModifiers: { spd: -25, accuracyPenalty: 25 },
+    onTurnStart({ unit }) {
+      unit.currentEnergy = Math.max(0, unit.currentEnergy - 25);
+    },
+  },
+  {
+    id: "disabled",
+    name: "Disabled",
+    icon: "DISABL",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Has a 50% chance that the move used does not apply, but still consumes energy.",
+    flags: { percentFailChance: 0.5 },
+  },
+  {
+    id: "energy_burns",
+    name: "Energy Burns",
+    icon: "E-BURN",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_START",
+    description: "Deals 4 damage per turn and reduces damage dealt by 10%.",
+    statModifiers: { outgoingDamageMultiplier: 0.9 },
+    onTurnStart({ unit, engine }) {
+      engine.dealTrueDamage(unit, 4, "Energy Burns");
+    },
+  },
+  {
+    id: "bound",
+    name: "Bound",
+    icon: "BOUND",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_END",
+    description: "Lowers speed by 50% and makes physical attacks from target deal 50% damage. Lasts 3 turns.",
+    statModifiers: { spdMultiplier: 0.5, physicalDamageMultiplier: 0.5 },
+  },
+  {
+    id: "voided",
+    name: "Voided",
+    icon: "VOID",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Take 25% more damage from non-super effective attacks.",
+    statModifiers: { nonSuperEffectiveDamageMultiplier: 1.25 },
+  },
+  {
+    id: "ichor",
+    name: "Ichor",
+    icon: "ICHOR",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Removes 33% of Defense while active. Adds 0.5 to type advantage/disadvantage multipliers.",
+    statModifiers: { defMultiplier: 0.67, typeEffectivenessBonus: 0.5 },
+  },
+  {
+    id: "corruption_sickness",
+    name: "Corruption Sickness",
+    icon: "CORRUPT",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 3,
+    tickTiming: "TURN_START",
+    description: "10% chance to deal 5 damage to the inflicted each turn for 3 turns.",
+    onTurnStart({ unit, engine }) {
+      if (engine.rng() <= 0.1) {
+        engine.dealTrueDamage(unit, 5, "Corruption Sickness");
+      }
+    },
+  },
+  {
+    id: "pain_link",
+    name: "Pain Link",
+    icon: "PAINLK",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Characters attacked by those under Pain Link will receive a percentage of damage back.",
+    flags: { reflectDamagePercentage: true },
+  },
+  {
+    id: "cursed_bleed",
+    name: "Cursed Bleed",
+    icon: "C-BLEED",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_START",
+    isProtectedByDefault: true,
+    description: "The opponent takes 5 damage per turn. Cannot be removed.",
+    onTurnStart({ unit, engine }) {
+      engine.dealTrueDamage(unit, 5, "Cursed Bleed");
+    },
+  },
+  {
+    id: "bomb",
+    name: "Bomb",
+    icon: "BOMB",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Detonates when the timer reaches 0, dealing specified damage. Timer can be decreased but not increased.",
+  },
+  {
+    id: "soup_burn",
+    name: "Soup Burn",
+    icon: "SOUP",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    defaultDuration: 2,
+    tickTiming: "TURN_START",
+    description: "Deals 5 damage per turn for 2 turns regardless of target element, including Water types.",
+    onTurnStart({ unit, engine }) {
+      engine.dealTrueDamage(unit, 5, "Soup Burn");
+    },
+  },
+  {
+    id: "acid_burns",
+    name: "Acid Burns",
+    icon: "A-BURN",
+    category: "debuff",
+    stackBehavior: "stack",
+    maxStacks: 10,
+    defaultDuration: 4,
+    tickTiming: "TURN_START",
+    description: "Takes 2 damage per stack every turn for 4 turns.",
+    onTurnStart({ unit, engine, status }) {
+      const stacks = status.stacks || 1;
+      engine.dealTrueDamage(unit, 2 * stacks, `Acid Burns (${stacks} stacks)`);
+    },
+  },
+  {
+    id: "dazed",
+    name: "Dazed",
+    icon: "DAZED",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_START",
+    description: "50% chance that the chosen move fails and the character performs Rest instead.",
+    flags: { dazedRestChance: 0.5 },
   },
 
   // ==========================================
@@ -256,7 +592,7 @@ export const STATUS_LIST = [
     maxStacks: 20,
     tickTiming: "TURN_END",
     isProtectedByDefault: true,
-    description: "Increases damage taken by 10% per stack. Cannot be blocked, resisted, or removed.",
+    description: "Each stack increases incoming damage by 10%. Cannot be blocked, resisted, or removed.",
     statModifiers: { incomingDmgPerStack: 0.1 },
   },
   {
@@ -267,7 +603,26 @@ export const STATUS_LIST = [
     stackBehavior: "stack",
     maxStacks: 10,
     tickTiming: "TURN_START",
-    description: "Deals 3% of Max HP damage per stack at the start of the turn.",
+    description: "Damages the opponent by 5 each turn per stack.",
+    onTurnStart({ unit, engine, status }) {
+      const stacks = status.stacks || 1;
+      engine.dealTrueDamage(unit, 5 * stacks, `Bleeding (${stacks} stacks)`);
+    },
+  },
+  {
+    id: "brittle",
+    name: "Brittle",
+    icon: "BRIT",
+    category: "debuff",
+    stackBehavior: "stack",
+    maxStacks: 10,
+    tickTiming: "NEVER",
+    description: "Lowers defense by 10 until hit. Can stack.",
+    statModifiers: { defPerStack: -10 },
+    onAfterTakeDamage({ defender, engine }) {
+      engine.statusManager.removeStatus(defender, "brittle", { forceProtected: true });
+      engine.log(`[Brittle] Cleared from ${defender.name} after being hit.`, "status");
+    },
   },
   {
     id: "burn",
@@ -277,7 +632,11 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Deals 5% of Max HP damage at the start of the turn (or heals if allied with Tethren Dragonsoul).",
+    description: "Damages all opponents by 3% of their MAX HP each turn.",
+    onTurnStart({ unit, engine }) {
+      const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.03));
+      engine.dealTrueDamage(unit, dmg, "Burn");
+    },
   },
 
   // ==========================================
