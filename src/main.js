@@ -1045,9 +1045,24 @@ class GameApp {
     const logContainer = document.getElementById("combat-log-list");
     if (!logContainer || !this.engine) return;
 
-    logContainer.innerHTML = [...this.engine.logs]
+    // Group logs by turn so the newest turn stays at the top of the panel,
+    // while within each turn entries are ordered chronologically (Cause -> Effect).
+    const turnGroups = [];
+    let currentGroup = null;
+    for (const entry of this.engine.logs) {
+      if (!currentGroup || currentGroup.turn !== entry.turn) {
+        currentGroup = { turn: entry.turn, entries: [] };
+        turnGroups.push(currentGroup);
+      }
+      currentGroup.entries.push(entry);
+    }
+
+    const orderedEntries = turnGroups
       .reverse()
-      .slice(0, 60)
+      .flatMap((group) => group.entries)
+      .slice(0, 60);
+
+    logContainer.innerHTML = orderedEntries
       .map(
         (entry) => `
         <div class="log-line ${entry.isSkill ? "log-skill-entry" : "log-effect-entry"} log-${entry.type}">

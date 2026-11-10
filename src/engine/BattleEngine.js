@@ -46,13 +46,13 @@ export class BattleEngine {
     }
   }
 
-  log(message, type = "info", { isSkill = null } = {}) {
+  log(message, type = "info", { isSkill = false } = {}) {
     const entry = {
       id: `${this.turnNumber}-${this.logs.length + 1}`,
       turn: this.turnNumber,
       message,
       type,
-      isSkill: isSkill !== null ? Boolean(isSkill) : Boolean(this._inSkillExecuteLogScope),
+      isSkill: Boolean(isSkill),
     };
     this.logs.push(entry);
     if (this.logs.length > 160) {
@@ -483,10 +483,14 @@ export class BattleEngine {
       const absorbed = Math.min(this.communalShields[target.teamId], remaining);
       this.communalShields[target.teamId] -= absorbed;
       remaining -= absorbed;
+      if (typeof target._absorbedByShieldThisSkill === "number") {
+        target._absorbedByShieldThisSkill += absorbed;
+      }
       if (!silentShields) {
         this.log(
           `Communal Shield absorbs ${absorbed} damage for ${target.name} (${this.communalShields[target.teamId]} Shield left).`,
-          "info"
+          "info",
+          { isSkill: false }
         );
       }
       if (remaining <= 0) return 0;
@@ -496,11 +500,16 @@ export class BattleEngine {
       const absorbed = Math.min(target.shieldHp, remaining);
       target.shieldHp -= absorbed;
       remaining -= absorbed;
+      if (typeof target._absorbedByShieldThisSkill === "number") {
+        target._absorbedByShieldThisSkill += absorbed;
+      }
       if (target.shieldHp <= 0) {
         this.statusManager.removeStatus(target, "shield", { forceProtected: true });
       }
       if (!silentShields) {
-        this.log(`${target.name}'s Shield absorbs ${absorbed} damage.`, "info");
+        this.log(`${target.name}'s Shield absorbs ${absorbed} damage.`, "info", {
+          isSkill: false,
+        });
       }
       if (remaining <= 0) return 0;
     }
@@ -1187,13 +1196,6 @@ export class BattleEngine {
       }
     }
 
-    if (moveId === "rest") {
-      const atkItem = this.getActiveItem(attacker);
-      if (atkItem && typeof atkItem.onRest === "function") {
-        atkItem.onRest({ unit: attacker, engine: this });
-      }
-    }
-
     if (!skill.isUniversal) {
       attacker.skillsUsedCount = (attacker.skillsUsedCount || 0) + 1;
       attacker.lastNonUniversalSkillId = skill.id;
@@ -1208,16 +1210,31 @@ export class BattleEngine {
 
       if (skill.forcesNextSkill) {
         attacker.forcedNextSkillId = skill.forcesNextSkill;
-        const nextSkillDef = Registry.getSkill(skill.forcesNextSkill);
-        this.log(
-          `[${attacker.name}] next required skill queued: [${nextSkillDef?.name || skill.forcesNextSkill}].`,
-          "special"
-        );
       }
 
       if (skill.upgradesSkill && skill.upgradesSkill.from && skill.upgradesSkill.to) {
         if (!attacker.skillUpgrades) attacker.skillUpgrades = {};
         attacker.skillUpgrades[skill.upgradesSkill.from] = skill.upgradesSkill.to;
+      }
+    }
+
+    this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
+    this.syncUnitActiveMoves(attacker);
+
+    if (moveId === "rest") {
+      const atkItem = this.getActiveItem(attacker);
+      if (atkItem && typeof atkItem.onRest === "function") {
+        atkItem.onRest({ unit: attacker, engine: this });
+      }
+    }
+
+    if (!skill.isUniversal) {
+      if (skill.forcesNextSkill) {
+        const nextSkillDef = Registry.getSkill(skill.forcesNextSkill);
+        this.log(
+          `[${attacker.name}] next required skill queued: [${nextSkillDef?.name || skill.forcesNextSkill}].`,
+          "special"
+        );
       }
 
       const enemyZander = this.getLivingEnemiesOf(attacker).find(
@@ -1241,9 +1258,6 @@ export class BattleEngine {
         }
       }
     }
-
-    this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
-    this.syncUnitActiveMoves(attacker);
 
     for (const ab of this.getActiveAbilities(attacker)) {
       if (typeof ab.onTurnEnd === "function") {
@@ -1359,12 +1373,39 @@ export class BattleEngine {
         skill.targetType === "self" ||
         skill.targetType === "all_allies"
       ) {
-        this._inSkillExecuteLogScope = true;
-        try {
-          skill.execute({ attacker, targets, engine: this });
-        } finally {
-          this._inSkillExecuteLogScope = false;
+        const execLogsStart = this.logs.length;
+        skill.execute({ attacker, targets, engine: this });
+        const addedLogs = this.logs.splice(execLogsStart);
+        const skillHeaders = [];
+        const skillEffects = [];
+        for (const entry of addedLogs) {
+          const isHeaderMsg =
+            entry.isSkill ||
+            entry.message.startsWith("[WAIT]") ||
+            entry.message.startsWith("[REST]") ||
+            entry.message.startsWith("[FORM]") ||
+            entry.message.startsWith(`[${attacker.name}]`) ||
+            entry.message.startsWith(`${attacker.name} casts`);
+          if (isHeaderMsg && skillHeaders.length === 0) {
+            entry.isSkill = true;
+            skillHeaders.push(entry);
+          } else {
+            entry.isSkill = false;
+            skillEffects.push(entry);
+          }
         }
+        if (skillHeaders.length === 0) {
+          const targetLabel =
+            targets.map((t) => t.name).join(", ") || attacker.name;
+          this.log(
+            `${attacker.name} [${skill.name}] -> ${targetLabel}`,
+            "special",
+            { isSkill: true }
+          );
+        } else {
+          this.logs.push(...skillHeaders);
+        }
+        this.logs.push(...skillEffects);
       }
     } else if (skill.computeRawHit) {
       const attackedDefendersThisSkill = new Set();
@@ -1416,6 +1457,9 @@ export class BattleEngine {
             continue;
           }
         }
+
+        const hitEffectLogsStart = this.logs.length;
+        target._absorbedByShieldThisSkill = 0;
 
         if (typeof skill.onBeforeAttack === "function") {
           skill.onBeforeAttack({ attacker, target, engine: this });
@@ -1528,7 +1572,13 @@ export class BattleEngine {
           }
         }
 
-        // Single condensed log line per target combining all hits:
+        const bufferedHitEffectLogs = this.logs.splice(hitEffectLogsStart);
+        const absorbedByShield = target._absorbedByShieldThisSkill || 0;
+        delete target._absorbedByShieldThisSkill;
+
+        // Single condensed log line per target combining all hits (Cause -> Effect):
+        const absorbedSummary =
+          absorbedByShield > 0 ? ` (${absorbedByShield} absorbed by Shield)` : "";
         const hitsBreakdown =
           perHitAmounts.length > 1
             ? ` (${perHitAmounts.length} hits: ${perHitAmounts.join(" + ")})`
@@ -1543,10 +1593,12 @@ export class BattleEngine {
           maxIgnoredDefPct > 0 ? ` [Ignored ${maxIgnoredDefPct}% DEF]` : "";
 
         this.log(
-          `${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${hitsBreakdown}${critSummary}${ignoreSummary}`,
+          `${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${absorbedSummary}${hitsBreakdown}${critSummary}${ignoreSummary}`,
           critHitsCount > 0 ? "crit" : "damage",
           { isSkill: true }
         );
+
+        this.logs.push(...bufferedHitEffectLogs);
 
         if (totalDamageToTarget > 0) {
           if (typeof skill.onAfterHit === "function") {
