@@ -72,7 +72,8 @@ export class StatusManager {
       target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + healAmt);
       this.engine.log(
         `[${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP).`,
-        "heal"
+        "heal",
+        { isSkill: false }
       );
       return false;
     }
@@ -80,7 +81,9 @@ export class StatusManager {
     if (def.category === "debuff" && !bypassImmunity) {
       if (this.isImmuneTo(target, statusId)) {
         if (!silent) {
-          this.engine.log(`${target.name} is immune to [${def.name}].`, "info");
+          this.engine.log(`${target.name} is immune to [${def.name}].`, "info", {
+            isSkill: false,
+          });
         }
         // Marius the Gallant's Steadfast Knight: counterattack with Auric Lance when enemy attempts to place [Decrease SPD]
         if (
@@ -91,7 +94,8 @@ export class StatusManager {
         ) {
           this.engine.log(
             `[${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`,
-            "special"
+            "special",
+            { isSkill: false }
           );
           this.engine.executeCounterSkill(target, "auric_lance", source.id);
         }
@@ -101,7 +105,8 @@ export class StatusManager {
         if (!silent) {
           this.engine.log(
             `${target.name}'s [Block Debuffs] blocked [${def.name}].`,
-            "info"
+            "info",
+            { isSkill: false }
           );
         }
         return false;
@@ -113,7 +118,8 @@ export class StatusManager {
         if (!silent) {
           this.engine.log(
             `${target.name}'s [Unbroken Sheath] blocked [${def.name}].`,
-            "info"
+            "info",
+            { isSkill: false }
           );
         }
         return false;
@@ -130,7 +136,8 @@ export class StatusManager {
       ) {
         this.engine.log(
           `${target.name}'s [Wand of Submission] reflects [${def.name}] back onto ${source.name}!`,
-          "special"
+          "special",
+          { isSkill: false }
         );
         return this.applyStatus(target, source, statusId, {
           duration,
@@ -161,7 +168,8 @@ export class StatusManager {
       if (!silent) {
         this.engine.log(
           `[${source.name}] Blossoming Spore Rod doubles [${def.name}]!`,
-          "special"
+          "special",
+          { isSkill: false }
         );
       }
     }
@@ -221,7 +229,8 @@ export class StatusManager {
           : "";
       this.engine.log(
         `${target.name} gains [${def.name}]${stackText}${durText}${protText}.`,
-        def.category === "debuff" ? "status" : "info"
+        def.category === "debuff" ? "status" : "info",
+        { isSkill: false }
       );
     }
 
@@ -244,7 +253,8 @@ export class StatusManager {
         if (this.engine.rng() < 0.2) {
           this.engine.log(
             `[${solanar.name}] Scholar of the Sun reacts to ${target.name}'s [${def.name}] and counterattacks with [Solar Nova]!`,
-            "special"
+            "special",
+            { isSkill: false }
           );
           this.engine.executeCounterSkill(solanar, "solar_nova", target.id);
         }
@@ -303,7 +313,9 @@ export class StatusManager {
     );
     if (idx !== -1) {
       const removed = target.statuses.splice(idx, 1)[0];
-      this.engine.log(`Cleansed [${removed.name}] from ${target.name}.`, "heal");
+      this.engine.log(`Cleansed [${removed.name}] from ${target.name}.`, "heal", {
+        isSkill: false,
+      });
       return true;
     }
     return false;
@@ -355,7 +367,9 @@ export class StatusManager {
           remaining.push(st);
         } else {
           if (st.id === "shield") unit.shieldHp = 0;
-          this.engine.log(`[${st.name}] wore off from ${unit.name}.`, "info");
+          this.engine.log(`[${st.name}] wore off from ${unit.name}.`, "info", {
+            isSkill: false,
+          });
         }
       } else {
         remaining.push(st);

@@ -1260,8 +1260,9 @@ export const SKILL_LIST = [
   },
 
   // ==========================================================
-  // ADDITIONAL EXPANDABLE HERO SKILLS
+  // ADDITIONAL EXPANDABLE HERO SKILLS (100% Unique Per Hero)
   // ==========================================================
+  // Valkyria Chronos (Tek / Light)
   {
     id: "chrono_burst",
     name: "Chrono Burst",
@@ -1281,6 +1282,25 @@ export const SKILL_LIST = [
       if (target.currentHp > 0) {
         engine.statusManager.applyStatus(attacker, target, "spd_down", { duration: 2 });
       }
+    },
+  },
+  {
+    id: "spear_breaker_volley",
+    name: "Quantum Piercer",
+    element: "Tek",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 45,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "3.2 x ATK (Ignores 50% DEF)",
+    description: "Fires a concentrated beam at one enemy, ignoring 50% of their Defense.",
+    getIgnoreDefPct() {
+      return 0.5;
+    },
+    computeRawHit({ stats }) {
+      return 3.2 * stats.atk;
     },
   },
   {
@@ -1305,27 +1325,53 @@ export const SKILL_LIST = [
       });
       engine.log(
         `${attacker.name} deploys Time Dilation Field: all allies gain [Increase SPD], [Increase ATK], and +20% Turn Meter.`,
-        "special"
+        "special",
+        { isSkill: true }
       );
     },
   },
   {
-    id: "spear_breaker_volley",
-    name: "Quantum Piercer",
-    element: "Tek",
+    id: "rift_overload",
+    name: "Rift Overload",
+    element: "Light",
     category: "Ranged",
     stab: true,
     hits: 1,
-    energyCost: 45,
+    energyCost: 75,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "2.0 x ATK + 0.1 x SPD (AoE + Delays 20% TM)",
+    description: "Detonates a temporal rift across all enemies and delays their Turn Meter by 20%.",
+    computeRawHit({ stats }) {
+      return 2.0 * stats.atk + 0.1 * stats.spd;
+    },
+    onAfterHit({ target, engine }) {
+      if (target.currentHp > 0) {
+        engine.modifyTurnMeter(target, -0.2);
+      }
+    },
+  },
+
+  // Seraphina Dawn (Light)
+  {
+    id: "sunfire_smite",
+    name: "Sunfire Smite",
+    element: "Light",
+    category: "Melee",
+    stab: true,
+    hits: 1,
+    energyCost: 20,
     accuracy: 100,
     targetType: "single_enemy",
-    formulaText: "3.2 x ATK (Ignores 50% DEF)",
-    description: "Fires a concentrated beam at one enemy, ignoring 50% of their Defense.",
-    getIgnoreDefPct() {
-      return 0.5;
-    },
+    formulaText: "1.8 x ATK + [Decrease DEF]",
+    description: "Strikes one enemy with solar light and places [Decrease DEF] for 2 turns.",
     computeRawHit({ stats }) {
-      return 3.2 * stats.atk;
+      return 1.8 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
+      }
     },
   },
   {
@@ -1351,29 +1397,71 @@ export const SKILL_LIST = [
       });
       engine.log(
         `${attacker.name} invokes Celestial Aegis: healed all allies by 25%, cleansed 1 debuff, and applied [Increase DEF].`,
-        "heal"
+        "heal",
+        { isSkill: true }
       );
     },
   },
   {
-    id: "sunfire_smite",
-    name: "Sunfire Smite",
+    id: "halo_of_judgment",
+    name: "Halo of Judgment",
     element: "Light",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 45,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "1.4 x ATK (x2 hits AoE)",
+    description: "Calls down twin rings of sacred light upon all enemies.",
+    computeRawHit({ stats }) {
+      return 1.4 * stats.atk;
+    },
+  },
+  {
+    id: "sanctuary_blessing",
+    name: "Sanctuary Blessing",
+    element: "Light",
+    category: "Status",
+    stab: false,
+    energyCost: 70,
+    cooldown: 4,
+    accuracy: null,
+    targetType: "all_allies",
+    formulaText: "Team [Block Debuffs] (2T) + +25 Energy",
+    description: "Places [Block Debuffs] on all allies for 2 turns and restores 25 Energy to each ally.",
+    execute({ attacker, engine }) {
+      const allies = engine.getLivingAlliesOf(attacker);
+      allies.forEach((ally) => {
+        engine.statusManager.applyStatus(attacker, ally, "block_debuffs", { duration: 2 });
+        ally.currentEnergy = Math.min(ally.maxEnergy, ally.currentEnergy + 25);
+      });
+      engine.log(
+        `${attacker.name} casts Sanctuary Blessing: all allies gain [Block Debuffs] (2T) and +25 Energy.`,
+        "heal",
+        { isSkill: true }
+      );
+    },
+  },
+
+  // Ignis the Sovereign (Dragon / Chaos)
+  {
+    id: "obsidian_claw",
+    name: "Obsidian Claw",
+    element: "Dragon",
     category: "Melee",
     stab: true,
-    hits: 1,
+    hits: 2,
     energyCost: 20,
     accuracy: 100,
     targetType: "single_enemy",
-    formulaText: "1.8 x ATK + [Decrease DEF]",
-    description: "Strikes one enemy with solar light and places [Decrease DEF] for 2 turns.",
-    computeRawHit({ stats }) {
-      return 1.8 * stats.atk;
+    formulaText: "1.3 x ATK (x2 hits, Ignores 20% DEF)",
+    description: "Rends one enemy 2 times with volcanic dragon claws, ignoring 20% of their DEF.",
+    getIgnoreDefPct() {
+      return 0.2;
     },
-    onAfterHit({ attacker, target, engine }) {
-      if (target.currentHp > 0) {
-        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
-      }
+    computeRawHit({ stats }) {
+      return 1.3 * stats.atk;
     },
   },
   {
@@ -1398,6 +1486,51 @@ export const SKILL_LIST = [
     },
   },
   {
+    id: "chaos_breath",
+    name: "Chaos Breath",
+    element: "Chaos",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 50,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "3.0 x ATK + [Decrease DEF] (2T)",
+    description: "Engulfs one target in abyssal dragonflame and places [Decrease DEF] for 2 turns.",
+    computeRawHit({ stats }) {
+      return 3.0 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "sovereigns_roar",
+    name: "Sovereign's Roar",
+    element: "Dragon",
+    category: "Status",
+    stab: false,
+    energyCost: 40,
+    cooldown: 3,
+    accuracy: null,
+    targetType: "self",
+    formulaText: "Self [Increase ATK] (2T) + +30% Turn Meter",
+    description: "Places [Increase ATK] on Ignis for 2 turns and fills Turn Meter by 30%.",
+    execute({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 2 });
+      engine.modifyTurnMeter(attacker, 0.3);
+      engine.log(
+        `${attacker.name} unleashes Sovereign's Roar: gains [Increase ATK] (2T) and +30% Turn Meter.`,
+        "special",
+        { isSkill: true }
+      );
+    },
+  },
+
+  // Vexor the Nightblade (Chaos / Fighting)
+  {
     id: "crimson_rend",
     name: "Crimson Rend",
     element: "Chaos",
@@ -1418,6 +1551,161 @@ export const SKILL_LIST = [
           duration: 2,
           stacks: 1,
         });
+      }
+    },
+  },
+  {
+    id: "phantom_step",
+    name: "Phantom Step",
+    element: "Chaos",
+    category: "Melee",
+    stab: true,
+    hits: 1,
+    energyCost: 45,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "2.6 x ATK (Ignores 40% DEF)",
+    description: "Strikes from the void at one enemy, ignoring 40% of their Defense.",
+    getIgnoreDefPct() {
+      return 0.4;
+    },
+    computeRawHit({ stats }) {
+      return 2.6 * stats.atk;
+    },
+  },
+  {
+    id: "void_guillotine",
+    name: "Void Guillotine",
+    element: "Fighting",
+    category: "Melee",
+    stab: true,
+    hits: 2,
+    energyCost: 65,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "1.8 x ATK (x2 hits) + [Deathbrand] (2T)",
+    description: "Executes a twin shadow strike on one enemy and places [Deathbrand] for 2 turns.",
+    computeRawHit({ stats }) {
+      return 1.8 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "deathbrand", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "shadow_veil",
+    name: "Shadow Veil",
+    element: "Chaos",
+    category: "Status",
+    stab: false,
+    energyCost: 35,
+    cooldown: 3,
+    accuracy: null,
+    targetType: "self",
+    formulaText: "Self [Increase SPD] & [Increase ATK] (2T)",
+    description: "Shrouds Vexor in void energy, granting [Increase SPD] and [Increase ATK] for 2 turns.",
+    execute({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "spd_up", { duration: 2 });
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 2 });
+      engine.log(
+        `${attacker.name} casts Shadow Veil: gains [Increase SPD] and [Increase ATK] (2T).`,
+        "special",
+        { isSkill: true }
+      );
+    },
+  },
+
+  // Orion Starweaver (Space / Time)
+  {
+    id: "astral_lance",
+    name: "Astral Lance",
+    element: "Space",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 20,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "2.0 x ATK (Ignores 25% DEF)",
+    description: "Hurls a spear of starlight at one enemy, ignoring 25% of their Defense.",
+    getIgnoreDefPct() {
+      return 0.25;
+    },
+    computeRawHit({ stats }) {
+      return 2.0 * stats.atk;
+    },
+  },
+  {
+    id: "supernova_cascade",
+    name: "Supernova Cascade",
+    element: "Space",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 75,
+    accuracy: 95,
+    targetType: "all_enemies",
+    formulaText: "1.6 x ATK (x2 hits AoE) + [Vulnerability]",
+    description: "Bombards all enemies 2 times with collapsing stars and places 1 stack of [Vulnerability] for 2 turns.",
+    computeRawHit({ stats }) {
+      return 1.6 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "vulnerability", {
+          duration: 2,
+          stacks: 1,
+        });
+      }
+    },
+  },
+  {
+    id: "cosmic_convergence",
+    name: "Cosmic Convergence",
+    element: "Time",
+    category: "Status",
+    stab: false,
+    energyCost: 55,
+    cooldown: 3,
+    accuracy: null,
+    targetType: "all_allies",
+    formulaText: "Team Shield (20% MAX HP) + +15% Turn Meter",
+    description: "Grants all allies a 20% MAX HP [Shield] for 2 turns and boosts their Turn Meter by 15%.",
+    execute({ attacker, engine }) {
+      const allies = engine.getLivingAlliesOf(attacker);
+      allies.forEach((ally) => {
+        const shieldVal = Math.max(10, Math.floor(ally.effectiveMaxHp * 0.2));
+        ally.shieldHp = (ally.shieldHp || 0) + shieldVal;
+        engine.statusManager.applyStatus(attacker, ally, "shield", { duration: 2 });
+        engine.modifyTurnMeter(ally, 0.15);
+      });
+      engine.log(
+        `${attacker.name} invokes Cosmic Convergence: all allies gain a 20% MAX HP [Shield] and +15% Turn Meter.`,
+        "heal",
+        { isSkill: true }
+      );
+    },
+  },
+  {
+    id: "gravity_singularity",
+    name: "Gravity Singularity",
+    element: "Space",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "3.2 x ATK + Delays 40% Turn Meter",
+    description: "Crushes one enemy in a gravitational singularity and reduces their Turn Meter by 40%.",
+    computeRawHit({ stats }) {
+      return 3.2 * stats.atk;
+    },
+    onAfterHit({ target, engine }) {
+      if (target.currentHp > 0) {
+        engine.modifyTurnMeter(target, -0.4);
       }
     },
   },

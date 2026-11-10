@@ -87,10 +87,10 @@ class GameApp {
     // Hub state: player's selected team (up to 6 characters) & selected boss
     this.selectedTeam = [
       { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-      { characterId: "seraphina_dawn", itemId: "aegis_core" },
-      { characterId: "ignis_drake", itemId: "executioner_lens" },
-      { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+      { characterId: "byun", itemId: "kawabunga_coffee" },
+      { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
+      { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
+      { characterId: "debt_bearer_alnith", itemId: "sharp_claws" },
     ];
     this.selectedBossEncounterId = "raid_antikhonor";
     this.lastEncounterConfig = null;
@@ -478,10 +478,10 @@ class GameApp {
     document.getElementById("preset-5-heroes-btn")?.addEventListener("click", () => {
       this.selectedTeam = [
         { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-        { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-        { characterId: "seraphina_dawn", itemId: "aegis_core" },
-        { characterId: "ignis_drake", itemId: "executioner_lens" },
-        { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+        { characterId: "byun", itemId: "kawabunga_coffee" },
+        { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
+        { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
+        { characterId: "debt_bearer_alnith", itemId: "sharp_claws" },
       ];
       this.renderHub();
     });
@@ -489,11 +489,11 @@ class GameApp {
     document.getElementById("preset-6-heroes-btn")?.addEventListener("click", () => {
       this.selectedTeam = [
         { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-        { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-        { characterId: "seraphina_dawn", itemId: "aegis_core" },
-        { characterId: "ignis_drake", itemId: "executioner_lens" },
-        { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
-        { characterId: "orion_starweaver", itemId: "executioner_lens" },
+        { characterId: "byun", itemId: "kawabunga_coffee" },
+        { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
+        { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
+        { characterId: "debt_bearer_alnith", itemId: "sharp_claws" },
+        { characterId: "tethren_dragonsoul", itemId: "dragonstone" },
       ];
       this.renderHub();
     });
@@ -901,13 +901,15 @@ class GameApp {
     `;
 
     const moves = this.engine.getAvailableMovesForUnit(activeUnit);
+    deckEl.innerHTML = "";
+    deckEl.dataset.activeActorId = activeUnit.id;
     deckEl.innerHTML = moves
       .map((m) => {
         const disabledAttr = !m.usable || !canControl ? "disabled" : "";
         const universalClass = m.isUniversal ? "universal-move" : "character-move";
         const forcedClass = m.isForcedMove ? "forced-next-move" : "";
         return `
-          <button type="button" class="move-btn ${universalClass} ${forcedClass}" data-move-id="${m.id}" ${disabledAttr}>
+          <button type="button" class="move-btn ${universalClass} ${forcedClass}" data-actor-id="${activeUnit.id}" data-move-id="${m.id}" ${disabledAttr}>
             <div class="move-btn-top">
               <span class="move-name">
                 ${m.isForcedMove ? "[NEXT] " : ""}${m.name}
@@ -1038,10 +1040,10 @@ class GameApp {
 
     logContainer.innerHTML = [...this.engine.logs]
       .reverse()
-      .slice(0, 50)
+      .slice(0, 60)
       .map(
         (entry) => `
-        <div class="log-line log-${entry.type}">
+        <div class="log-line ${entry.isSkill ? "log-skill-entry" : "log-effect-entry"} log-${entry.type}">
           <span class="log-turn">[T${entry.turn}]</span>
           <span>${entry.message}</span>
         </div>

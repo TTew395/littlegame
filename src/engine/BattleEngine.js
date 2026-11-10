@@ -44,12 +44,13 @@ export class BattleEngine {
     }
   }
 
-  log(message, type = "info") {
+  log(message, type = "info", { isSkill = null } = {}) {
     const entry = {
       id: `${this.turnNumber}-${this.logs.length + 1}`,
       turn: this.turnNumber,
       message,
       type,
+      isSkill: isSkill !== null ? Boolean(isSkill) : Boolean(this._inSkillExecuteLogScope),
     };
     this.logs.push(entry);
     if (this.logs.length > 160) {
@@ -97,6 +98,7 @@ export class BattleEngine {
       isBoss: Boolean(template.isBoss),
       isMinion: Boolean(template.isMinion),
       isSummon: false,
+      isBossSummon: Boolean(template.id === "swarm_spawn" || template.isSummon),
       form: initialFormKey,
       forms: clonedForms,
       activeMoveIds: [...(clonedForms[initialFormKey]?.moves || [])],
@@ -241,6 +243,7 @@ export class BattleEngine {
       role: "Soul Construct",
       isBoss: false,
       isSummon: true,
+      isBossSummon: true,
       isActionlessTotem: true,
       summonerId: summoner.id,
       linkedTargetId: targetHero.id,
@@ -676,7 +679,9 @@ export class BattleEngine {
   handleUnitDeath(target, killer) {
     target.currentHp = 0;
     target.turnMeter = 0;
-    this.log(`[DEFEATED] ${target.name} has fallen.`, "crit");
+    target.defeatedAtTurn = this.turnNumber;
+    this.extraTurnQueue = this.extraTurnQueue.filter((id) => id !== target.id);
+    this.log(`[DEFEATED] ${target.name} has fallen.`, "crit", { isSkill: false });
 
     // Resurrection Orb: revive at 50% HP once if not under Block Revive
     const tgtItem = this.getActiveItem(target);
@@ -930,8 +935,29 @@ export class BattleEngine {
     }
   }
 
+  cleanupDefeatedBossSummons() {
+    this.units = this.units.filter((u) => {
+      const isBossSummonUnit =
+        u.isBossSummon ||
+        u.isSummon ||
+        u.templateId === "swarm_spawn" ||
+        u.templateId === "soul_spear";
+      if (
+        isBossSummonUnit &&
+        u.currentHp <= 0 &&
+        u.defeatedAtTurn !== undefined &&
+        this.turnNumber > u.defeatedAtTurn
+      ) {
+        this.extraTurnQueue = this.extraTurnQueue.filter((id) => id !== u.id);
+        return false;
+      }
+      return true;
+    });
+  }
+
   beginUnitTurn(unit, { isExtraTurn = false } = {}) {
     this.turnNumber += 1;
+    this.cleanupDefeatedBossSummons();
     this.activeUnitId = unit.id;
 
     if (unit.stance === "rest") {
@@ -1214,7 +1240,12 @@ export class BattleEngine {
     }
 
     if (typeof skill.execute === "function" && !skill.computeRawHit) {
-      skill.execute({ attacker, targets, engine: this });
+      this._inSkillExecuteLogScope = true;
+      try {
+        skill.execute({ attacker, targets, engine: this });
+      } finally {
+        this._inSkillExecuteLogScope = false;
+      }
     } else if (skill.computeRawHit) {
       const attackedDefendersThisSkill = new Set();
 
@@ -1227,7 +1258,8 @@ export class BattleEngine {
           if (evadeChance > 0 && this.rng() < evadeChance) {
             this.log(
               `${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
-              "special"
+              "special",
+              { isSkill: true }
             );
             if (
               !isFreeCounter &&
@@ -1236,7 +1268,8 @@ export class BattleEngine {
             ) {
               this.log(
                 `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`,
-                "special"
+                "special",
+                { isSkill: false }
               );
               this.executeCounterSkill(target, "wrist_blades", attacker.id);
             }
@@ -1255,7 +1288,11 @@ export class BattleEngine {
             Math.min(100, (skill.accuracy ?? 100) + accBonus + blindPenalty)
           );
           if (effectiveAcc < 100 && this.rng() * 100 > effectiveAcc) {
-            this.log(`${attacker.name} [${skill.name}] -> ${target.name}: MISSED.`, "info");
+            this.log(
+              `${attacker.name} [${skill.name}] -> ${target.name}: MISSED.`,
+              "info",
+              { isSkill: true }
+            );
             continue;
           }
         }
@@ -1386,7 +1423,8 @@ export class BattleEngine {
 
         this.log(
           `${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${hitsBreakdown}${critSummary}${ignoreSummary}`,
-          critHitsCount > 0 ? "crit" : "damage"
+          critHitsCount > 0 ? "crit" : "damage",
+          { isSkill: true }
         );
 
         if (totalDamageToTarget > 0) {
