@@ -1,7 +1,7 @@
-name=statuses_2.js
+name=statuses.js
 /**
  * Status Effect Definitions (Buffs, Debuffs, Stacking, Non-Stacking, Turn-based & Event-based)
- * Emoji-free tactical abbreviations. Includes expanded debuff registry.
+ * Emoji-free tactical abbreviations. Includes expanded debuff and buff registries.
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -261,10 +261,6 @@ export const STATUS_LIST = [
     description: "Knocked back by Test's Hammer: can only use and be hit by Ranged moves.",
     flags: { rangedOnly: true },
   },
-
-  // ==========================================
-  // NEW ADDED DEBUFFS
-  // ==========================================
   {
     id: "dance",
     name: "Dance",
@@ -640,18 +636,53 @@ export const STATUS_LIST = [
   },
 
   // ==========================================
-  // NON-STACKING TURN-BASED BUFFS
+  // TURN-BASED / SPECIAL BUFFS
   // ==========================================
   {
-    id: "atk_up",
-    name: "Increase ATK",
-    icon: "+ATK",
+    id: "stone_skin",
+    name: "Stone Skin",
+    icon: "STONE",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Increases Attack by 50%.",
-    statModifiers: { atkMultiplier: 1.5 },
+    cannotBeSpread: true,
+    cannotBeExtended: true,
+    description: "Immune to all debuffs except [Burn] and [Bomb]. Removes non-Burn/Bomb debuffs on apply. Takes 80% less damage, gains Stone Skin HP (50% MAX HP), immune to HP swap and Destroy MAX HP. Takes 200% damage from [Bomb] debuffs.",
+    flags: { immuneToHpSwap: true, immuneToHpDestroy: true, cannotBeSpread: true, cannotBeExtended: true },
+    statModifiers: { incomingDamageMultiplier: 0.2, bombDamageMultiplier: 3.0 },
+    onApply({ unit, engine }) {
+      unit.statuses = (unit.statuses || []).filter(
+        (s) => s.category !== "debuff" || ["burn", "bomb"].includes(s.id)
+      );
+      unit.shieldHp = (unit.shieldHp || 0) + Math.floor(unit.effectiveMaxHp * 0.5);
+      engine.log(`[Stone Skin] ${unit.name} gains Stone Skin barrier (+50% MAX HP) and 80% damage reduction!`, "special");
+    },
+  },
+  {
+    id: "unkillable",
+    name: "Unkillable",
+    icon: "UNKILL",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    cannotBeSpread: true,
+    cannotBeExtended: true,
+    description: "The character's HP cannot drop below 1. Cannot be extended or spread.",
+    flags: { unkillable: true, cannotBeSpread: true, cannotBeExtended: true },
+  },
+  {
+    id: "block_damage",
+    name: "Block Damage",
+    icon: "BLK-DMG",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    cannotBeExtended: true,
+    description: "The character ignores all incoming damage. Duration cannot be increased.",
+    flags: { blockDamage: true, cannotBeExtended: true },
   },
   {
     id: "def_up",
@@ -661,8 +692,143 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Increases Defense by 60%.",
+    description: "Increases the character's DEF by the specified amount for a specific duration.",
     statModifiers: { defMultiplier: 1.6 },
+  },
+  {
+    id: "atk_up",
+    name: "Increase ATK",
+    icon: "+ATK",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Increases damage dealt by a specified percentage for a specific duration.",
+    statModifiers: { atkMultiplier: 1.5 },
+  },
+  {
+    id: "crit_rate_up",
+    name: "Increase C. Rate",
+    icon: "+CRATE",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Increases character's C. Rate.",
+    statModifiers: { critRateBonus: 30 },
+  },
+  {
+    id: "crit_dmg_up",
+    name: "Increase C. DMG",
+    icon: "+CDMG",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Increases character's C. DMG.",
+    statModifiers: { critDmgBonus: 30 },
+  },
+  {
+    id: "strengthen",
+    name: "Strengthen",
+    icon: "STRNG",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Decreases incoming damage by 15% or 25% (calculated after Defense).",
+    statModifiers: { incomingDamageMultiplier: 0.75 },
+  },
+  {
+    id: "shield",
+    name: "Shield",
+    icon: "SHIELD",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Damage dealt to the character will first be applied to the shield, unless stated otherwise.",
+  },
+  {
+    id: "magma_shield",
+    name: "Magma Shield",
+    icon: "M-SHIELD",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Damage dealt is applied to the Magma Shield first; the attacker takes 100% of the damage dealt to the shield as reflected damage.",
+    onAfterTakeDamage({ attacker, defender, damageTaken, engine }) {
+      if (attacker && damageTaken > 0) {
+        engine.dealTrueDamage(attacker, damageTaken, "Magma Shield Reflect (100%)");
+      }
+    },
+  },
+  {
+    id: "reflect_damage",
+    name: "Reflect Damage",
+    icon: "REFL",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Reflects a percentage of damage taken back to the attacker.",
+    flags: { reflectDamagePercentage: 0.3 },
+  },
+  {
+    id: "counterattack",
+    name: "Counterattack",
+    icon: "COUNTER",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "When attacked, counterattacks with the character's basic skill. Cannot trigger other counterattacks.",
+    flags: { counterattackOnHit: true, counterOnAttacked: true },
+  },
+  {
+    id: "taunt",
+    name: "Taunt",
+    icon: "TAUNT",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Enemies must select this target when attacking. Does not override Provoke.",
+    flags: { taunt: true },
+  },
+  {
+    id: "shatter",
+    name: "Shatter",
+    icon: "SHTR",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Character ignore DEF stats are boosted.",
+    statModifiers: { bonusIgnoreDefPct: 0.25 },
+  },
+  {
+    id: "fortify",
+    name: "Fortify",
+    icon: "FORT",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Incoming ignore DEF amounts are reduced.",
+    flags: { reduceIncomingIgnoreDef: 0.5 },
+  },
+  {
+    id: "intercept",
+    name: "Intercept",
+    icon: "INCPT",
+    category: "buff",
+    stackBehavior: "stack",
+    maxStacks: 5,
+    tickTiming: "NEVER",
+    description: "Each stack prevents one instance of a crowd-control (Stun, Freeze, Sleep, etc.) debuff from landing. Not consumed at turn start or if innately immune.",
+    flags: { blockCrowdControlStack: true },
   },
   {
     id: "spd_up",
@@ -685,60 +851,6 @@ export const STATUS_LIST = [
     tickTiming: "TURN_START",
     description: "Boosts Speed by 100% until the beginning of the next turn.",
     statModifiers: { spdMultiplier: 2.0 },
-  },
-  {
-    id: "counterattack",
-    name: "Counterattack",
-    icon: "COUNTER",
-    category: "buff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Counterattacks with the character's basic skill when attacked.",
-    flags: { counterattackOnHit: true, counterOnAttacked: true },
-  },
-  {
-    id: "taunt",
-    name: "Taunt",
-    icon: "TAUNT",
-    category: "buff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Draws single-target enemy attacks.",
-    flags: { taunt: true },
-  },
-  {
-    id: "shield",
-    name: "Shield",
-    icon: "SHIELD",
-    category: "buff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Absorbs incoming damage up to the Shield's value.",
-  },
-  {
-    id: "block_damage",
-    name: "Block Damage",
-    icon: "BLK-DMG",
-    category: "buff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "Blocks all incoming direct damage.",
-    flags: { blockDamage: true },
-  },
-  {
-    id: "unkillable",
-    name: "Unkillable",
-    icon: "UNKILL",
-    category: "buff",
-    stackBehavior: "refresh",
-    maxStacks: 1,
-    tickTiming: "TURN_END",
-    description: "HP cannot drop below 1 from direct attacks.",
-    flags: { unkillable: true },
   },
   {
     id: "block_debuffs",
