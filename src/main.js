@@ -2,10 +2,10 @@
  * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
-import { initializeGameContent } from "./data/index.js";
+import { initializeGameContent } from "./data/index.js?v=6";
 import { Registry } from "./engine/Registry.js";
-import { BattleEngine } from "./engine/BattleEngine.js";
-import { P2PNetworkManager } from "./network/P2PNetworkManager.js";
+import { BattleEngine } from "./engine/BattleEngine.js?v=6";
+import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=6";
 
 initializeGameContent();
 
@@ -740,6 +740,19 @@ class GameApp {
     if (unit.templateId === "predator") {
       const evadePct = Math.round(this.engine.getUnitEvasionChance(unit) * 100);
       badges.push(`<span class="mechanic-badge">Evasion: ${evadePct}%</span>`);
+    }
+    if (unit.templateId === "solanar_the_gleaming") {
+      if (c.scholarOfSunRevived) {
+        badges.push(`<span class="mechanic-badge">Scholar of Sun: Revived</span>`);
+      } else if (unit.currentHp <= 0) {
+        badges.push(
+          `<span class="mechanic-badge danger">Scholar of Sun: Dormant (Revives on Last Ally Death)</span>`
+        );
+      } else {
+        badges.push(
+          `<span class="mechanic-badge">Scholar of Sun: Ready (75% Revive)</span>`
+        );
+      }
     }
     if (unit.templateId === "debt_bearer_alnith") {
       const totalDue = this.engine.getTotalEnemyBloodDue(unit);

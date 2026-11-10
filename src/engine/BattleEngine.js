@@ -7,8 +7,8 @@
  */
 
 import { Registry } from "./Registry.js";
-import { StatusManager } from "./StatusManager.js";
-import { DamagePipeline } from "./DamagePipeline.js";
+import { StatusManager } from "./StatusManager.js?v=6";
+import { DamagePipeline } from "./DamagePipeline.js?v=6";
 
 function createSeededRng(seed = Date.now()) {
   let a = seed >>> 0;
@@ -407,17 +407,33 @@ export class BattleEngine {
     if (unit.currentHp > 0 && !this.extraTurnQueue.includes(unit.id)) {
       this.extraTurnQueue.unshift(unit.id);
     }
-    if (!suppressReactions && unit.currentHp > 0) {
-      const opposingSolanars = this.getLivingEnemiesOf(unit).filter((u) =>
+    if (!suppressReactions && unit.currentHp > 0 && this.turnNumber > 0) {
+      this.triggerSolarNovaReaction(unit, `${unit.name}'s Extra/Instant Turn`);
+    }
+  }
+
+  triggerSolarNovaReaction(triggerUnit, reasonText) {
+    if (this._inSolarNovaCounter || this.turnNumber <= 0) return;
+    const candidateSolanars = this.getLivingUnits().filter(
+      (u) =>
+        u.id !== triggerUnit?.id &&
         this.hasAbilityFlag(u, "counterOnEnemyExtraTurnOrBuff")
-      );
-      for (const solanar of opposingSolanars) {
-        if (this.rng() < 0.2) {
+    );
+    for (const solanar of candidateSolanars) {
+      if (solanar.currentHp > 0 && this.rng() < 0.2) {
+        this._inSolarNovaCounter = true;
+        try {
           this.log(
-            `[${solanar.name}] Scholar of the Sun reacts to ${unit.name}'s Extra/Instant Turn and counterattacks with [Solar Nova]!`,
-            "special"
+            `[${solanar.name}] Scholar of Sun / Solar Nova reacts to ${reasonText} and counterattacks with [Solar Nova]!`,
+            "special",
+            { isSkill: false }
           );
-          this.executeCounterSkill(solanar, "solar_nova", unit.id);
+          const enemies = this.getLivingEnemiesOf(solanar);
+          if (enemies.length > 0) {
+            this.executeCounterSkill(solanar, "solar_nova", enemies[0].id);
+          }
+        } finally {
+          this._inSolarNovaCounter = false;
         }
       }
     }
@@ -752,29 +768,31 @@ export class BattleEngine {
       }
     }
 
-    const livingAllies = this.getLivingAlliesOf(target).filter(
-      (a) => a.id !== target.id
+    const allTeamAllies = this.units.filter(
+      (a) => a.teamId === target.teamId && a.id !== target.id && !a.isSummon
     );
-    for (const ally of livingAllies) {
+    for (const ally of allTeamAllies) {
       for (const ab of this.getActiveAbilities(ally)) {
         if (typeof ab.onAllyKilled === "function") {
           ab.onAllyKilled({ unit: ally, deadAlly: target, killer, engine: this });
         }
       }
-      const allyItem = this.getActiveItem(ally);
-      if (allyItem && typeof allyItem.onAllyDied === "function") {
-        allyItem.onAllyDied({
-          unit: ally,
-          holder: ally,
-          deadAlly: target,
-          killer,
-          engine: this,
-        });
+      if (ally.currentHp > 0) {
+        const allyItem = this.getActiveItem(ally);
+        if (allyItem && typeof allyItem.onAllyDied === "function") {
+          allyItem.onAllyDied({
+            unit: ally,
+            holder: ally,
+            deadAlly: target,
+            killer,
+            engine: this,
+          });
+        }
       }
     }
 
-    // Solanar the Gleaming's Scholar of the Sun:
-    // "If all allies are dead, revives this character with 75% HP and 75% Energy, then grants an Instant Turn."
+    // Solanar the Gleaming's Scholar of Sun:
+    // "Once per battle, if this character is dead, when their last living ally dies, instantly revives this character with 75% HP, 75% energy, and grants an Instant Turn."
     const remainingLivingOnTeam = this.units.filter(
       (u) => u.teamId === target.teamId && !u.isSummon && u.currentHp > 0
     );
@@ -789,24 +807,30 @@ export class BattleEngine {
           (u.abilityIds || []).includes("scholar_of_sun")
       );
       if (deadSolanar) {
-        deadSolanar.customCounters.scholarOfSunRevived = true;
-        deadSolanar._justRevivedProtectThisSkill = true;
-        deadSolanar.statuses = deadSolanar.statuses.filter(
-          (s) => !["stun", "sleep", "freeze"].includes(s.id)
-        );
-        deadSolanar.currentHp = Math.max(
-          1,
-          Math.floor(deadSolanar.effectiveMaxHp * 0.75)
-        );
-        deadSolanar.currentEnergy = Math.max(
-          deadSolanar.currentEnergy,
-          Math.floor(deadSolanar.maxEnergy * 0.75)
-        );
-        this.log(
-          `[${deadSolanar.name}] Scholar of the Sun activates! With all allies fallen, ${deadSolanar.name} revives at 75% HP (${deadSolanar.currentHp} HP) and 75% Energy (${deadSolanar.currentEnergy} EN) with an Instant Turn!`,
-          "special"
-        );
-        this.grantExtraTurn(deadSolanar);
+        const scholarAb = Registry.getAbility("scholar_of_sun");
+        if (scholarAb && typeof scholarAb.tryReviveSolanar === "function") {
+          scholarAb.tryReviveSolanar({ solanar: deadSolanar, engine: this });
+        } else {
+          deadSolanar.customCounters.scholarOfSunRevived = true;
+          deadSolanar._justRevivedProtectThisSkill = true;
+          deadSolanar.statuses = deadSolanar.statuses.filter(
+            (s) => !["stun", "sleep", "freeze", "frozen", "block_passive_skills", "seal"].includes(s.id)
+          );
+          deadSolanar.currentHp = Math.max(
+            1,
+            Math.round(deadSolanar.effectiveMaxHp * 0.75)
+          );
+          deadSolanar.currentEnergy = Math.max(
+            deadSolanar.currentEnergy,
+            Math.round(deadSolanar.maxEnergy * 0.75)
+          );
+          deadSolanar.turnMeter = 1000;
+          this.log(
+            `[${deadSolanar.name}] Scholar of Sun activates! With all allies fallen, ${deadSolanar.name} revives at 75% HP (${deadSolanar.currentHp} HP) and 75% Energy (${deadSolanar.currentEnergy} EN) with an Instant Turn!`,
+            "special"
+          );
+          this.grantExtraTurn(deadSolanar, { suppressReactions: true });
+        }
       }
     }
 
@@ -1480,7 +1504,7 @@ export class BattleEngine {
           this.statusManager.hasStatus(target, "hex");
 
         for (let h = 0; h < hits; h++) {
-          if (target.currentHp <= 0) break;
+          if (target.currentHp <= 0 || target._justRevivedProtectThisSkill) break;
 
           const ignoreDefPct =
             typeof skill.getIgnoreDefPct === "function"

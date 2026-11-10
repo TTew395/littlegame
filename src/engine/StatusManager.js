@@ -62,6 +62,9 @@ export class StatusManager {
     if (!target || target.currentHp <= 0) return false;
     const def = Registry.getStatus(statusId);
     if (!def) return false;
+    if (target._justRevivedProtectThisSkill && def.category === "debuff") {
+      return false;
+    }
 
     // Special Boss Hook: Ternax Hellfire's "Lethal Lava"
     if (
@@ -244,21 +247,9 @@ export class StatusManager {
       }
     }
 
-    // Solanar the Gleaming's Scholar of the Sun: 20% chance to counterattack with [Solar Nova] when an enemy receives a buff
+    // Solanar the Gleaming's Scholar of Sun / Solar Nova: 20% chance to counterattack with [Solar Nova] when any character receives a buff
     if (def.category === "buff" && this.engine.turnNumber > 0) {
-      const opposingSolanars = this.engine
-        .getLivingEnemiesOf(target)
-        .filter((u) => this.engine.hasAbilityFlag(u, "counterOnEnemyExtraTurnOrBuff"));
-      for (const solanar of opposingSolanars) {
-        if (this.engine.rng() < 0.2) {
-          this.engine.log(
-            `[${solanar.name}] Scholar of the Sun reacts to ${target.name}'s [${def.name}] and counterattacks with [Solar Nova]!`,
-            "special",
-            { isSkill: false }
-          );
-          this.engine.executeCounterSkill(solanar, "solar_nova", target.id);
-        }
-      }
+      this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}] buff`);
     }
 
     return true;
@@ -273,6 +264,7 @@ export class StatusManager {
     if (!def) return;
 
     const existing = target.statuses.find((s) => s.id === statusId);
+    const prevStacks = existing ? existing.stacks : 0;
     if (existing) {
       existing.stacks = Math.min(def.maxStacks || 99, stacks);
       existing.isProtected =
@@ -288,6 +280,15 @@ export class StatusManager {
         duration: null,
         isProtected: isProtected || Boolean(def.isProtectedByDefault),
       });
+    }
+
+    if (
+      stacks > prevStacks &&
+      this.engine.turnNumber > 0 &&
+      (def.category === "buff" ||
+        ["war_armor", "brood_atk_boost", "forever_waiting_guard"].includes(statusId))
+    ) {
+      this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}]`);
     }
   }
 
