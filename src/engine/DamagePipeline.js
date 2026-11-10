@@ -1,12 +1,13 @@
 /**
  * DamagePipeline
  * Handles all stat calculations and damage formulas:
- * - Effective Stats (Base + Item + Status Buffs/Debuffs + Stance + Passive Abilities like Avatar of Anarchy)
+ * - Effective Stats (Base + Item + Status Buffs/Debuffs + Stance + Passive Abilities)
+ * - Negative Defense support (e.g. First Genius, Zander Evolution State DEF: -50 = +50% damage taken)
  * - STAB (Same-Type Attack Bonus: 1.25x)
  * - Critical Hits (Crit Rate & Crit Damage)
- * - Defense Mitigation (e.g. Defense 15 = 15% reduction) & Ignore DEF % (Reality Reversal, Pyre of High Graves, All Realms Leveled)
- * - Species Elemental Resistances (e.g. Higher Being: 50% reduced damage from Chaos, Dragon, Tek)
- * - Stacking Damage Reduction (Antikhonor's War Armor: 4% per stack)
+ * - Defense Mitigation & Ignore DEF %
+ * - Stacking Vulnerability (+10% damage taken per stack) & War Armor (-4% per stack)
+ * - Outgoing & Incoming Ability Modifiers (Gravewalker, Astral Ward, Forever Waiting)
  * - Tied Construct Vulnerability (Soul Spear takes +100% damage from its tied hero)
  */
 
@@ -51,18 +52,20 @@ export class DamagePipeline {
       const def = Registry.getStatus(st.id);
       if (!def || !def.statModifiers) continue;
       const mod = def.statModifiers;
-      if (mod.atkMultiplier) stats.atk *= mod.atkMultiplier;
-      if (mod.defMultiplier) stats.def *= mod.defMultiplier;
-      if (mod.spdMultiplier) stats.spd *= mod.spdMultiplier;
+      if (mod.atkMultiplier !== undefined) stats.atk *= mod.atkMultiplier;
+      if (mod.defMultiplier !== undefined && stats.def > 0) {
+        stats.def *= mod.defMultiplier;
+      }
+      if (mod.spdMultiplier !== undefined) stats.spd *= mod.spdMultiplier;
       if (mod.critDmgPerStack) stats.critDmg += mod.critDmgPerStack * st.stacks;
     }
 
     // 3. Stance modifier: "Rest" halves defense until turn comes back to the character
-    if (unit.stance === "rest") {
+    if (unit.stance === "rest" && stats.def > 0) {
       stats.def *= 0.5;
     }
 
-    // 4. Passive Ability stat hooks (e.g., Karnage's Avatar of Anarchy: +1 C.DMG per 3 SPD)
+    // 4. Passive Ability stat hooks (e.g., Karnage's Avatar of Anarchy, Ouroboros Brood Queen)
     const abilities = this.engine.getActiveAbilities(unit);
     for (const ab of abilities) {
       if (typeof ab.modifyStats === "function") {
@@ -71,12 +74,13 @@ export class DamagePipeline {
     }
 
     stats.atk = Math.max(1, Math.round(stats.atk * 10) / 10);
-    stats.def = Math.max(0, Math.round(stats.def * 10) / 10);
+    // Allow negative defense (e.g. Zander Evolution State DEF: -50 = +50% damage)
+    stats.def = Math.round(stats.def * 10) / 10;
     stats.spd = Math.max(1, Math.round(stats.spd));
     return stats;
   }
 
-  computeHitDamage({ attacker, target, skill, ignoreDefPct = 0 }) {
+  computeHitDamage({ attacker, target, skill, ignoreDefPct = 0, hitIndex = 0 }) {
     const atkStats = this.getEffectiveStats(attacker);
     const tgtStats = this.getEffectiveStats(target);
 
@@ -86,8 +90,17 @@ export class DamagePipeline {
       target,
       stats: atkStats,
       targetStats: tgtStats,
+      hitIndex,
       engine: this.engine,
     });
+
+    // Cap skills that scale off ENEMY MAX HP against Almighty Immunity bosses (e.g. For One is Holy)
+    if (
+      this.engine.hasAbilityFlag(target, "capEnemyMaxHpScalingPct") &&
+      skill.id === "for_one_is_holy"
+    ) {
+      rawDamage = Math.min(rawDamage, target.effectiveMaxHp * 0.1);
+    }
 
     // 2. STAB (Same-Type Attack Bonus)
     const hasStab =
@@ -103,7 +116,7 @@ export class DamagePipeline {
       rawDamage *= 1 + atkStats.critDmg / 100;
     }
 
-    // 4. Defense Mitigation (e.g., DEF 15 = 15% damage reduction, reduced by ignoreDefPct)
+    // 4. Defense Mitigation (Supports positive DEF reduction and negative DEF amplification)
     let clampedIgnoreDef = Math.max(0, Math.min(1, ignoreDefPct));
 
     // Check Dragonblood Fury passive bonus
@@ -119,15 +132,33 @@ export class DamagePipeline {
       }
     }
 
-    const effectiveDefPct = Math.max(
-      0,
-      Math.min(0.85, (tgtStats.def * (1 - clampedIgnoreDef)) / 100)
-    );
-    let finalDamage = rawDamage * (1 - effectiveDefPct);
+    let finalDamage = rawDamage;
+    if (tgtStats.def >= 0) {
+      const effectiveDefPct = Math.max(
+        0,
+        Math.min(0.85, (tgtStats.def * (1 - clampedIgnoreDef)) / 100)
+      );
+      finalDamage = rawDamage * (1 - effectiveDefPct);
+    } else {
+      // Negative DEF increases damage taken (e.g. DEF -50 => +50% damage)
+      const ampPct = Math.abs(tgtStats.def) / 100;
+      finalDamage = rawDamage * (1 + ampPct);
+    }
 
-    // 5. Buff / Passive / Species damage reduction (Skipped if skill has bypassMitigation: true, like All Realms Leveled)
+    // 5. Outgoing damage ability modifiers (e.g. Novok's Gravewalker +10% per living ally)
+    for (const ab of this.engine.getActiveAbilities(attacker)) {
+      if (typeof ab.modifyOutgoingDamage === "function") {
+        finalDamage = ab.modifyOutgoingDamage({
+          attacker,
+          defender: target,
+          damage: finalDamage,
+          engine: this.engine,
+        });
+      }
+    }
+
+    // 6. Buff / Passive / Species damage reduction (Skipped if skill has bypassMitigation: true)
     if (!skill.bypassMitigation) {
-      // Species damage reduction (e.g. Higher Being: 50% reduced damage from Chaos, Dragon, Tek)
       const passivesBlocked = this.engine.statusManager.hasFlag(
         target,
         "blockPassives"
@@ -144,7 +175,7 @@ export class DamagePipeline {
         }
       }
 
-      // Status-based damage modifiers (e.g., War Armor: -4% per stack, Deathbrand: +25% damage taken)
+      // Status-based damage modifiers (War Armor, Forever Waiting, Deathbrand, Vulnerability)
       for (const st of target.statuses) {
         const def = Registry.getStatus(st.id);
         if (!def || !def.statModifiers) continue;
@@ -155,12 +186,15 @@ export class DamagePipeline {
           );
           finalDamage *= 1 - red;
         }
+        if (def.statModifiers.incomingDmgPerStack) {
+          finalDamage *= 1 + def.statModifiers.incomingDmgPerStack * st.stacks;
+        }
         if (def.statModifiers.incomingDamageMultiplier) {
           finalDamage *= def.statModifiers.incomingDamageMultiplier;
         }
       }
 
-      // Team aura passives (e.g., Seraphina's Astral Ward)
+      // Team aura / Defender passives (e.g. Seraphina's Astral Ward, Novok's Gravewalker)
       const targetAllies = this.engine.getLivingAlliesOf(target);
       for (const ally of targetAllies) {
         for (const ab of this.engine.getActiveAbilities(ally)) {
@@ -169,14 +203,14 @@ export class DamagePipeline {
               attacker,
               defender: target,
               damage: finalDamage,
+              engine: this.engine,
             });
           }
         }
       }
     }
 
-    // 6. Soul Spear Linked Target Vulnerability:
-    // "Soul Spears take 100% more damage from the characters they are tied to."
+    // 7. Soul Spear Linked Target Vulnerability (+100% damage from tied character)
     if (target.isSummon && target.linkedTargetId === attacker.id) {
       finalDamage *= 2.0;
     }

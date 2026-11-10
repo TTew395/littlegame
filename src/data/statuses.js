@@ -1,17 +1,5 @@
 /**
  * Status Effect Definitions (Buffs, Debuffs, Stacking, Non-Stacking, Turn-based & Event-based)
- *
- * Properties:
- * - id: unique string ID
- * - name: display name
- * - icon: emoji or icon symbol
- * - category: "buff" | "debuff" | "special"
- * - stackBehavior: "refresh" (non-stacking, refreshes max duration) | "stack" (adds stacks) | "independent"
- * - maxStacks: max stacks when stackBehavior === "stack"
- * - tickTiming: "TURN_START" | "TURN_END" | "NEVER" (event-driven or permanent)
- * - isProtectedByDefault: boolean (cannot be cleansed/removed if true)
- * - statModifiers: optional { atkPct, defPct, spdPct, dmgReductionPerStack, ... }
- * - flags: { skipTurn, blockPassives, blockActiveSkills, blockRevive, ... }
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -106,8 +94,19 @@ export const STATUS_LIST = [
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
-    description: "Decreases Defense by 50%.",
-    statModifiers: { defMultiplier: 0.5 },
+    description: "Decreases Defense by 60%.",
+    statModifiers: { defMultiplier: 0.4 },
+  },
+  {
+    id: "atk_down",
+    name: "Decrease ATK",
+    icon: "⚔️⬇️",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Decreases Attack by 50%.",
+    statModifiers: { atkMultiplier: 0.5 },
   },
   {
     id: "spd_down",
@@ -120,10 +119,45 @@ export const STATUS_LIST = [
     description: "Decreases Speed by 30%.",
     statModifiers: { spdMultiplier: 0.7 },
   },
+  {
+    id: "hex",
+    name: "Hex",
+    icon: "🔮",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    isProtectedByDefault: true,
+    description: "Cursed by Hex. Vulnerable to Ternax Hellfire's Lethal Lava, Molten Slag, and Hexreaper.",
+  },
+  {
+    id: "extrapolation_link",
+    name: "β-Link Zero Cost",
+    icon: "🧬",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    isProtectedByDefault: true,
+    description: "Energy costs reduced to 0. Using any move besides Rest or Wait triggers massive temporal backlash damage!",
+    flags: { zeroEnergyCost: true },
+  },
 
   // ==========================================
   // STACKING TURN-BASED DEBUFFS
   // ==========================================
+  {
+    id: "vulnerability",
+    name: "Vulnerability",
+    icon: "🎯",
+    category: "debuff",
+    stackBehavior: "stack",
+    maxStacks: 20,
+    tickTiming: "TURN_END",
+    isProtectedByDefault: true,
+    description: "Increases damage taken by 10% per stack. Cannot be blocked, resisted, or removed.",
+    statModifiers: { incomingDmgPerStack: 0.1 },
+  },
   {
     id: "bleed",
     name: "Bleed",
@@ -136,13 +170,13 @@ export const STATUS_LIST = [
   },
   {
     id: "burn",
-    name: "HP Burn",
+    name: "Burn",
     icon: "🔥",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_START",
-    description: "Deals 5% of Max HP damage at the start of the turn.",
+    description: "Deals 5% of Max HP damage at the start of the turn (or when instantly activated).",
   },
 
   // ==========================================
@@ -182,6 +216,38 @@ export const STATUS_LIST = [
     statModifiers: { spdMultiplier: 1.3 },
   },
   {
+    id: "shield",
+    name: "Shield",
+    icon: "💠",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Absorbs incoming damage up to the Shield's value.",
+  },
+  {
+    id: "block_damage",
+    name: "Block Damage",
+    icon: "🛡️✨",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Blocks all incoming direct damage.",
+    flags: { blockDamage: true },
+  },
+  {
+    id: "unkillable",
+    name: "Unkillable",
+    icon: "❤️‍🔥",
+    category: "buff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "HP cannot drop below 1 from direct attacks.",
+    flags: { unkillable: true },
+  },
+  {
     id: "block_debuffs",
     name: "Block Debuffs",
     icon: "✨",
@@ -194,7 +260,7 @@ export const STATUS_LIST = [
   },
 
   // ==========================================
-  // STACKING TURN-INDEPENDENT / EVENT-DRIVEN STATUSES
+  // BOSS MECHANIC / TURN-INDEPENDENT STATUSES
   // ==========================================
   {
     id: "war_armor",
@@ -203,9 +269,9 @@ export const STATUS_LIST = [
     category: "buff",
     stackBehavior: "stack",
     maxStacks: 20,
-    tickTiming: "NEVER", // Controlled by Master of Legions & Glory to All Honorable Dead
+    tickTiming: "NEVER",
     isProtectedByDefault: true,
-    description: "Each stack decreases damage taken by 4%. Reduced by 1 (+ attacker Glory stacks) when attacked (once per skill). Resets to 8 on Antikhonor's turn.",
+    description: "Each stack decreases damage taken by 4%. Reduced by 1 (+ attacker Glory) when attacked once per skill. Resets to 8 on Antikhonor's turn.",
     statModifiers: { dmgReductionPerStack: 0.04 },
   },
   {
@@ -215,9 +281,67 @@ export const STATUS_LIST = [
     category: "special",
     stackBehavior: "stack",
     maxStacks: 50,
-    tickTiming: "NEVER", // Cleared when Antikhonor takes a turn or War Armor hits 0
+    tickTiming: "NEVER",
     isProtectedByDefault: true,
-    description: "Whenever this character attacks with a skill, increases Glory by 1 and reduces Antikhonor's War Armor stacks by this character's Glory count.",
+    description: "Increases by 1 when attacking with a skill and reduces Antikhonor's War Armor by this unit's Glory count.",
+  },
+  {
+    id: "brood_atk_boost",
+    name: "Consumed Brood (+10% ATK)",
+    icon: "🪲⬆️",
+    category: "buff",
+    stackBehavior: "stack",
+    maxStacks: 99,
+    tickTiming: "NEVER",
+    isProtectedByDefault: true,
+    description: "Permanent +10% ATK per stack from consuming Swarm Spawns.",
+  },
+  {
+    id: "evolution_vulnerability",
+    name: "Molting Shell (DEF=5, SPD=60)",
+    icon: "🐛⬇️",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    isProtectedByDefault: true,
+    description: "Evolution counter reached 0: Ouroboros's DEF is reduced to 5 and SPD is reduced to 60.",
+  },
+  {
+    id: "forever_waiting_guard",
+    name: "Forever Waiting (-10% DMG)",
+    icon: "🌌🛡️",
+    category: "buff",
+    stackBehavior: "stack",
+    maxStacks: 9,
+    tickTiming: "NEVER",
+    isProtectedByDefault: true,
+    description: "Reduces damage taken by 10% per stack (up to 90%). Resets on Allekheiros's turn.",
+    statModifiers: { dmgReductionPerStack: 0.1 },
+  },
+  {
+    id: "silent_charging",
+    name: "Ten Thousand Years Silent",
+    icon: "⏳🌌",
+    category: "special",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "NEVER",
+    isProtectedByDefault: true,
+    description: "Charging Flectere si Nequeno: ATK -50%, SPD -75%. Counters with Sweep the Field when attacked.",
+    statModifiers: { atkMultiplier: 0.5, spdMultiplier: 0.25 },
+  },
+  {
+    id: "flectere_exhaustion",
+    name: "Exhausted (-100% DEF)",
+    icon: "💔🛡️",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    isProtectedByDefault: true,
+    description: "Flectere si Nequeno failed to kill a target: DEF reduced by 100%.",
+    statModifiers: { defMultiplier: 0 },
   },
   {
     id: "poise_focus",
@@ -227,7 +351,7 @@ export const STATUS_LIST = [
     stackBehavior: "stack",
     maxStacks: 5,
     tickTiming: "NEVER",
-    description: "Increases Crit Damage by 10% per stack. Does not expire with turns.",
+    description: "Increases Crit Damage by 10% per stack.",
     statModifiers: { critDmgPerStack: 10 },
   },
 ];

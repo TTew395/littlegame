@@ -69,6 +69,49 @@ body {
   gap: 8px;
 }
 
+.select-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.encounter-select {
+  background: var(--bg-card);
+  color: #fde68a;
+  border: 1px solid var(--accent-gold);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mechanic-badge {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid var(--accent-gold);
+  color: #fde68a;
+  font-weight: 600;
+}
+
+.mechanic-badge.danger {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: var(--accent-crimson);
+  color: #fecaca;
+}
+
+.communal-shield-pill {
+  font-size: 0.74rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(6, 182, 212, 0.2);
+  border: 1px solid var(--accent-cyan);
+  color: #a5f3fc;
+  font-weight: 700;
+}
+
 .pill-btn,
 .action-btn {
   background: var(--bg-card);

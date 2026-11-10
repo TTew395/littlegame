@@ -1,6 +1,5 @@
 /**
  * Species / Archetype Definitions
- * Easily add new species with elemental/type resistances, stat bonuses, or passive traits.
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -23,6 +22,59 @@ export const SPECIES_LIST = [
     damageReductionByType: {
       Psychic: 0.2,
       Ghost: 0.2,
+    },
+  },
+  {
+    id: "hive_sovereign",
+    name: "Hive Sovereign",
+    description: "Chitinous brood organism. Takes 20% reduced damage from Fighting and Earth.",
+    damageReductionByType: {
+      Fighting: 0.2,
+      Earth: 0.2,
+    },
+  },
+  {
+    id: "lich_lord",
+    name: "Undying Lich",
+    description: "Necromantic master of the crypt. 25% reduced damage from Death and Poison.",
+    damageReductionByType: {
+      Death: 0.25,
+      Poison: 0.25,
+    },
+  },
+  {
+    id: "magma_wyrm",
+    name: "Magma Wyrm",
+    description: "Born in volcanic hellfire. 30% reduced damage from Fire and Steel.",
+    damageReductionByType: {
+      Fire: 0.3,
+      Steel: 0.3,
+    },
+  },
+  {
+    id: "chronos_archon",
+    name: "Chronos Archon",
+    description: "Master of temporal equations. 20% reduced damage from Time and Tek.",
+    damageReductionByType: {
+      Time: 0.2,
+      Tek: 0.2,
+    },
+  },
+  {
+    id: "cosmic_warden",
+    name: "Cosmic Warden",
+    description: "Sentinel of the void. 20% reduced damage from Space and Light.",
+    damageReductionByType: {
+      Space: 0.2,
+      Light: 0.2,
+    },
+  },
+  {
+    id: "seraphic_septimus",
+    name: "Seraphic Septimus",
+    description: "Multi-bar divine entity of pure Light.",
+    damageReductionByType: {
+      Light: 0.25,
     },
   },
   {

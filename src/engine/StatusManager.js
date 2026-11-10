@@ -4,7 +4,7 @@
  * - Stacking vs Non-Stacking statuses
  * - Turn-ticking ("TURN_START", "TURN_END") vs Turn-Independent ("NEVER") statuses
  * - Protected statuses (cannot be cleansed/stolen)
- * - Immunity checks (e.g., Antikhonor's Almighty Immunity)
+ * - Immunity checks & Special Absorption (e.g. Ternax Hellfire's Lethal Lava absorbing [Burn])
  */
 
 import { Registry } from "./Registry.js";
@@ -38,7 +38,6 @@ export class StatusManager {
   }
 
   isImmuneTo(target, statusId) {
-    // Check passive abilities (respecting [Block Passive Skills] unless cannotBeBlocked)
     const abilities = this.engine.getActiveAbilities(target);
     for (const ab of abilities) {
       if (ab.immunities && ab.immunities.includes(statusId)) {
@@ -52,20 +51,38 @@ export class StatusManager {
     source,
     target,
     statusId,
-    { duration = null, stacks = 1, isProtected = false, silent = false } = {}
+    {
+      duration = null,
+      stacks = 1,
+      isProtected = false,
+      bypassImmunity = false,
+      silent = false,
+    } = {}
   ) {
     if (target.currentHp <= 0) return false;
     const def = Registry.getStatus(statusId);
     if (!def) return false;
 
-    // Check debuff immunity / Block Debuffs
-    if (def.category === "debuff") {
+    // Special Boss Hook: Ternax Hellfire's "Lethal Lava"
+    // "Whenever Ternax receives a [Burn] debuff, instantly removes it and heals Ternax by 10% of their MAX HP."
+    if (
+      statusId === "burn" &&
+      this.engine.getActiveAbilities(target).some((a) => a.id === "lethal_lava")
+    ) {
+      const healAmt = Math.max(1, Math.floor(target.effectiveMaxHp * 0.1));
+      target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + healAmt);
+      this.engine.log(
+        `🌋 [${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP)!`,
+        "heal"
+      );
+      return false;
+    }
+
+    // Check debuff immunity / Block Debuffs (unless bypassImmunity is true, e.g., Queen's Spawn Vulnerability or Magma Pound Hex)
+    if (def.category === "debuff" && !bypassImmunity) {
       if (this.isImmuneTo(target, statusId)) {
         if (!silent) {
-          this.engine.log(
-            `🛡️ ${target.name} is immune to [${def.name}]!`,
-            "info"
-          );
+          this.engine.log(`🛡️ ${target.name} is immune to [${def.name}]!`, "info");
         }
         return false;
       }
@@ -91,7 +108,6 @@ export class StatusManager {
         }
         existing.isProtected = existing.isProtected || protectedFlag;
       } else {
-        // Non-stacking ("refresh")
         if (duration !== null) {
           existing.duration = Math.max(existing.duration ?? 0, duration);
         }
@@ -104,14 +120,17 @@ export class StatusManager {
         icon: def.icon,
         category: def.category,
         tickTiming: def.tickTiming,
-        stacks: def.stackBehavior === "stack" ? Math.min(def.maxStacks || 99, stacks) : 1,
+        stacks:
+          def.stackBehavior === "stack"
+            ? Math.min(def.maxStacks || 99, stacks)
+            : 1,
         duration: def.tickTiming === "NEVER" ? null : duration,
         isProtected: protectedFlag,
       });
     }
 
     if (!silent) {
-      const protText = protectedFlag ? " 🔒(Protected)" : "";
+      const protText = protectedFlag ? " 🔒" : "";
       const durText =
         def.tickTiming === "NEVER" || duration === null ? "" : ` (${duration}T)`;
       const stackText =
@@ -137,7 +156,8 @@ export class StatusManager {
     const existing = target.statuses.find((s) => s.id === statusId);
     if (existing) {
       existing.stacks = Math.min(def.maxStacks || 99, stacks);
-      existing.isProtected = existing.isProtected || isProtected || Boolean(def.isProtectedByDefault);
+      existing.isProtected =
+        existing.isProtected || isProtected || Boolean(def.isProtectedByDefault);
     } else {
       target.statuses.push({
         id: statusId,
@@ -163,6 +183,9 @@ export class StatusManager {
       if (s.isProtected && !forceProtected) return true;
       return false;
     });
+    if (statusId === "shield") {
+      target.shieldHp = 0;
+    }
   }
 
   cleanseOneDebuff(target) {
@@ -191,8 +214,7 @@ export class StatusManager {
           const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
           this.engine.dealTrueDamage(unit, dmg, `Bleed x${st.stacks}`);
         } else if (st.id === "burn") {
-          const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.05));
-          this.engine.dealTrueDamage(unit, dmg, "HP Burn");
+          this.engine.triggerBurnTick(unit);
         }
       }
     }
@@ -211,10 +233,8 @@ export class StatusManager {
         if (st.duration > 0) {
           remaining.push(st);
         } else {
-          this.engine.log(
-            `⏱️ [${st.name}] wore off from ${unit.name}.`,
-            "info"
-          );
+          if (st.id === "shield") unit.shieldHp = 0;
+          this.engine.log(`⏱️ [${st.name}] wore off from ${unit.name}.`, "info");
         }
       } else {
         remaining.push(st);

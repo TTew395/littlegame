@@ -1,9 +1,13 @@
 /**
  * Main Application & UI Controller
- * Connects the Registry, BattleEngine, and P2PNetworkManager to the interactive UI:
- * - Preset Battle Modes (5-Hero Raid vs Antikhonor, 1v1 Duel, Custom Squad Builder)
- * - WebRTC Multiplayer Lobby (PeerJS Room Code + Zero-Server Copy-Paste SDP Handshake)
- * - Turn Order Ribbon, Destroyed Max HP Visualization, Status Stack Badges, Character Codex
+ * Supports all 7 Raid Boss Encounters + 1v1 Duel + 3v3 Squad PvP:
+ * 1. Antikhonor, Broken God (5 Heroes)
+ * 2. Ouroboros, The Swarm (5 Heroes)
+ * 3. Crypt-Keeper Novok (5 Heroes)
+ * 4. Ternax Hellfire (5 Heroes)
+ * 5. First Genius, Zander (6 Heroes Recommended)
+ * 6. Allekheiros, Eternal Guardian (5 Heroes)
+ * 7. Theridine, Great Septimus (5 Heroes)
  */
 
 import { initializeGameContent } from "./data/index.js";
@@ -13,13 +17,90 @@ import { P2PNetworkManager } from "./network/P2PNetworkManager.js";
 
 initializeGameContent();
 
+const FIVE_HERO_SQUAD = [
+  { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
+  { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+  { characterId: "seraphina_dawn", itemId: "aegis_core" },
+  { characterId: "ignis_drake", itemId: "executioner_lens" },
+  { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+];
+
+const SIX_HERO_SQUAD = [
+  ...FIVE_HERO_SQUAD,
+  { characterId: "orion_starweaver", itemId: "executioner_lens" },
+];
+
+export const ENCOUNTER_PRESETS = {
+  raid_antikhonor: {
+    label: "👑 Raid: Antikhonor, Broken God (5v1)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [{ characterId: "antikhonor_broken_god" }],
+  },
+  raid_ouroboros: {
+    label: "🪲 Raid: Ouroboros, The Swarm (5v1+Spawns)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [
+      { characterId: "ouroboros_the_swarm" },
+      { characterId: "swarm_spawn" },
+      { characterId: "swarm_spawn" },
+    ],
+  },
+  raid_novok: {
+    label: "⚰️ Raid: Crypt-Keeper Novok (5v3)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [
+      { characterId: "crypt_keeper_novok" },
+      { characterId: "grave_acolyte" },
+      { characterId: "grave_acolyte" },
+    ],
+  },
+  raid_ternax: {
+    label: "🌋 Raid: Ternax Hellfire (5v1)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [{ characterId: "ternax_hellfire" }],
+  },
+  raid_zander: {
+    label: "⏳ Raid: First Genius, Zander (6v1)",
+    team1: SIX_HERO_SQUAD,
+    team2: [{ characterId: "first_genius_zander" }],
+  },
+  raid_allekheiros: {
+    label: "🌌 Raid: Allekheiros, Eternal Guardian (5v1)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [{ characterId: "allekheiros_eternal_guardian" }],
+  },
+  raid_theridine: {
+    label: "👁️‍🗨️ Raid: Theridine, Great Septimus (5v1 • 16 Bars)",
+    team1: FIVE_HERO_SQUAD,
+    team2: [{ characterId: "theridine_great_septimus" }],
+  },
+  duel_1v1: {
+    label: "👹 1v1 Duel: Karnage vs Antikhonor",
+    team1: [{ characterId: "karnage_the_anarch", itemId: "anarch_sigil" }],
+    team2: [{ characterId: "antikhonor_broken_god" }],
+  },
+  squad_pvp: {
+    label: "⚔️ 3v3 Tactical Squad PvP",
+    team1: [
+      { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
+      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+      { characterId: "seraphina_dawn", itemId: "aegis_core" },
+    ],
+    team2: [
+      { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
+      { characterId: "ignis_drake", itemId: "vampiric_chalice" },
+      { characterId: "vexor_nightblade", itemId: "chronos_hourglass" },
+    ],
+  },
+};
+
 class GameApp {
   constructor() {
     this.engine = null;
     this.selectedTargetId = null;
     this.inspectedUnitId = null;
     this.autoBossAi = true;
-    this.battlePreset = "raid_5v1"; // "raid_5v1" | "duel_1v1" | "squad_pvp"
+    this.battlePreset = "raid_antikhonor";
 
     this.network = new P2PNetworkManager({
       onStatusChange: (text, state) => this.updateNetworkStatusUI(text, state),
@@ -48,52 +129,21 @@ class GameApp {
     this.renderCodexModal();
   }
 
-  getPresetTeams(preset) {
-    if (preset === "duel_1v1") {
-      return {
-        mode: "duel_1v1",
-        team1: [{ characterId: "karnage_the_anarch", itemId: "anarch_sigil" }],
-        team2: [{ characterId: "antikhonor_broken_god", itemId: "none" }],
-      };
-    }
-    if (preset === "squad_pvp") {
-      return {
-        mode: "squad_pvp",
-        team1: [
-          { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-          { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-          { characterId: "seraphina_dawn", itemId: "aegis_core" },
-        ],
-        team2: [
-          { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
-          { characterId: "ignis_drake", itemId: "vampiric_chalice" },
-          { characterId: "vexor_nightblade", itemId: "chronos_hourglass" },
-        ],
-      };
-    }
-    // Default: "raid_5v1" (5 Characters Recommended vs Antikhonor, Broken God)
-    return {
-      mode: "raid_5v1",
-      team1: [
-        { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-        { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-        { characterId: "seraphina_dawn", itemId: "aegis_core" },
-        { characterId: "ignis_drake", itemId: "executioner_lens" },
-        { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
-      ],
-      team2: [{ characterId: "antikhonor_broken_god", itemId: "none" }],
-    };
-  }
+  startNewBattle(presetKey = this.battlePreset) {
+    this.battlePreset = presetKey;
+    const cfg = ENCOUNTER_PRESETS[presetKey] || ENCOUNTER_PRESETS.raid_antikhonor;
 
-  startNewBattle(preset = this.battlePreset) {
-    this.battlePreset = preset;
-    const cfg = this.getPresetTeams(preset);
     this.engine = new BattleEngine({
-      mode: cfg.mode,
+      mode: presetKey,
       seed: Date.now(),
       team1Config: cfg.team1,
       team2Config: cfg.team2,
     });
+
+    const selectEl = document.getElementById("encounter-select");
+    if (selectEl && selectEl.value !== presetKey) {
+      selectEl.value = presetKey;
+    }
 
     this.ensureValidSelection();
     this.renderAll();
@@ -136,7 +186,6 @@ class GameApp {
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
     if (!activeUnit || activeUnit.id !== action.actorId) return;
 
-    // If connected as WebRTC Client, send intent to Host
     if (this.network.role === "client" && !fromRemotePeer) {
       this.network.sendActionIntent(action);
       return;
@@ -156,12 +205,11 @@ class GameApp {
 
   checkIfAiShouldAct() {
     if (!this.engine || this.engine.winnerTeam) return;
-    if (this.network.role === "client") return; // Host runs AI
+    if (this.network.role === "client") return;
 
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
     if (!activeUnit) return;
 
-    // Trigger AI if Team 2 is active and Auto-Boss AI is enabled (and no P2P client is controlling Team 2)
     const isP2PClientConnected =
       this.network.role === "host" &&
       (this.network.connections.some((c) => c.open) ||
@@ -179,34 +227,30 @@ class GameApp {
   }
 
   bindStaticEvents() {
-    // Mode selector buttons
-    document.querySelectorAll("[data-preset]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document
-          .querySelectorAll("[data-preset]")
-          .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        this.startNewBattle(btn.dataset.preset);
+    const selectEl = document.getElementById("encounter-select");
+    if (selectEl) {
+      selectEl.innerHTML = Object.entries(ENCOUNTER_PRESETS)
+        .map(([key, val]) => `<option value="${key}">${val.label}</option>`)
+        .join("");
+      selectEl.addEventListener("change", () => {
+        this.startNewBattle(selectEl.value);
       });
-    });
+    }
 
-    // AI Toggle
     const aiToggle = document.getElementById("toggle-ai-btn");
     if (aiToggle) {
       aiToggle.addEventListener("click", () => {
         this.autoBossAi = !this.autoBossAi;
-        aiToggle.textContent = `🤖 Enemy AI: ${this.autoBossAi ? "ON" : "MANUAL"}`;
+        aiToggle.textContent = `🤖 Boss/Enemy AI: ${this.autoBossAi ? "ON" : "MANUAL"}`;
         aiToggle.classList.toggle("active", this.autoBossAi);
         this.checkIfAiShouldAct();
       });
     }
 
-    // Restart Battle
     document.getElementById("restart-battle-btn")?.addEventListener("click", () => {
       this.startNewBattle(this.battlePreset);
     });
 
-    // Modals (WebRTC P2P Lobby & Character/Skill Codex)
     document.getElementById("open-webrtc-btn")?.addEventListener("click", () => {
       document.getElementById("webrtc-modal")?.classList.remove("hidden");
     });
@@ -220,7 +264,6 @@ class GameApp {
       document.getElementById("codex-modal")?.classList.add("hidden");
     });
 
-    // PeerJS Room Code Buttons
     document.getElementById("host-room-btn")?.addEventListener("click", () => {
       const codeInput = document.getElementById("room-code-input");
       this.network.hostRoomWithCode(codeInput?.value || "");
@@ -232,7 +275,6 @@ class GameApp {
       }
     });
 
-    // Manual SDP Offer/Answer Copy-Paste Buttons
     document.getElementById("create-sdp-offer-btn")?.addEventListener("click", async () => {
       const out = document.getElementById("sdp-token-box");
       if (out) {
@@ -243,8 +285,7 @@ class GameApp {
     document.getElementById("accept-sdp-offer-btn")?.addEventListener("click", async () => {
       const out = document.getElementById("sdp-token-box");
       if (out && out.value.trim()) {
-        const answer = await this.network.acceptManualOfferAndCreateAnswer(out.value);
-        out.value = answer;
+        out.value = await this.network.acceptManualOfferAndCreateAnswer(out.value);
       }
     });
     document.getElementById("complete-sdp-btn")?.addEventListener("click", async () => {
@@ -291,7 +332,9 @@ class GameApp {
     container.innerHTML = combatants
       .map((u) => {
         const isActive = u.id === this.engine.activeUnitId;
-        const tmPct = isActive ? 100 : Math.min(100, Math.round((u.turnMeter / 1000) * 100));
+        const tmPct = isActive
+          ? 100
+          : Math.min(100, Math.round((u.turnMeter / 1000) * 100));
         const spd = this.engine.getEffectiveStats(u).spd;
         return `
           <div class="tm-chip team-${u.teamId} ${isActive ? "active-turn" : ""}" data-unit-id="${u.id}">
@@ -319,7 +362,20 @@ class GameApp {
   renderTeamsArena() {
     const team1El = document.getElementById("team-1-container");
     const team2El = document.getElementById("team-2-container");
+    const team1ShieldEl = document.getElementById("team-1-communal-shield");
+    const team2ShieldEl = document.getElementById("team-2-communal-shield");
     if (!team1El || !team2El) return;
+
+    if (team1ShieldEl) {
+      const s1 = this.engine.communalShields?.[1] || 0;
+      team1ShieldEl.innerHTML =
+        s1 > 0 ? `<span class="communal-shield-pill">💠 Communal Shield: ${s1} HP</span>` : "";
+    }
+    if (team2ShieldEl) {
+      const s2 = this.engine.communalShields?.[2] || 0;
+      team2ShieldEl.innerHTML =
+        s2 > 0 ? `<span class="communal-shield-pill">💠 Communal Shield: ${s2} HP</span>` : "";
+    }
 
     const team1Units = this.engine.units.filter((u) => u.teamId === 1);
     const team2Units = this.engine.units.filter((u) => u.teamId === 2);
@@ -347,6 +403,47 @@ class GameApp {
     });
   }
 
+  renderBossMechanicCounters(unit) {
+    const badges = [];
+    const c = unit.customCounters || {};
+
+    if (unit.templateId === "ouroboros_the_swarm") {
+      badges.push(
+        `<span class="mechanic-badge">🧬 Evolution Counter: ${c.evolutionCounter ?? 8}/8</span>`
+      );
+    }
+    if (unit.templateId === "first_genius_zander") {
+      if (unit.form === "base") {
+        badges.push(
+          `<span class="mechanic-badge">⚗️ Transmutation: ${c.transmutation ?? 0}/600</span>`
+        );
+      } else {
+        badges.push(
+          `<span class="mechanic-badge">☄️ Termination: ${c.termination ?? 8}/8 (DMG Taken: ${c.evolutionDamageTaken ?? 0})</span>`
+        );
+      }
+    }
+    if (unit.templateId === "theridine_great_septimus") {
+      badges.push(
+        `<span class="mechanic-badge">👁️‍🗨️ Sacred Bars: ${c.hpBarsRemaining ?? 16}/16</span>`
+      );
+      if ((c.chargingBarsRemaining || 0) > 0) {
+        badges.push(
+          `<span class="mechanic-badge danger">⚡ Charging Bars: ${c.chargingBarsRemaining}/7 (${c.chargingReactionsLeft} turns left)</span>`
+        );
+      }
+    }
+    if (unit.templateId === "antikhonor_broken_god") {
+      badges.push(
+        `<span class="mechanic-badge">⚔️ Skills Used: ${unit.skillsUsedCount}</span>`
+      );
+    }
+    if ((unit.shieldHp || 0) > 0) {
+      badges.push(`<span class="mechanic-badge">💠 Shield: ${unit.shieldHp}</span>`);
+    }
+    return badges.join("");
+  }
+
   renderUnitCardHTML(unit) {
     const isActive = unit.id === this.engine.activeUnitId;
     const isTarget = unit.id === this.selectedTargetId;
@@ -355,7 +452,8 @@ class GameApp {
 
     const currentHpPct = Math.max(0, (unit.currentHp / unit.baseMaxHp) * 100);
     const destroyedPct = unit.destroyedHpPct || 0;
-    const energyPct = unit.maxEnergy > 0 ? (unit.currentEnergy / unit.maxEnergy) * 100 : 0;
+    const energyPct =
+      unit.maxEnergy > 0 ? (unit.currentEnergy / unit.maxEnergy) * 100 : 0;
     const tmPct = Math.min(100, Math.round((unit.turnMeter / 1000) * 100));
     const effStats = this.engine.getEffectiveStats(unit);
 
@@ -384,6 +482,8 @@ class GameApp {
         ? `<span class="form-tag">${unit.forms[unit.form]?.name || unit.form}</span>`
         : "";
 
+    const mechanicBadges = this.renderBossMechanicCounters(unit);
+
     return `
       <div class="unit-card ${unit.isBoss ? "boss-card" : ""} ${unit.isSummon ? "summon-card" : ""} ${isActive ? "is-active" : ""} ${isTarget ? "is-target" : ""} ${isInspected ? "is-inspected" : ""} ${isDead ? "is-dead" : ""}" data-unit-id="${unit.id}">
         <div class="unit-card-header">
@@ -397,6 +497,7 @@ class GameApp {
               <h4>${unit.name}</h4>
               ${formBadge}
               ${stanceBadge}
+              ${mechanicBadges}
             </div>
             <div class="unit-sub-row">
               <span>${unit.types.join(" / ")}</span>
@@ -408,10 +509,9 @@ class GameApp {
           </div>
         </div>
 
-        <!-- HP Bar with Destroyed Max HP Visualization -->
         <div class="bar-group">
           <div class="bar-label">
-            <span>HP</span>
+            <span>HP ${unit.templateId === "theridine_great_septimus" ? `(Bar ${unit.customCounters?.hpBarsRemaining ?? 16}/16)` : ""}</span>
             <span>
               ${unit.currentHp} / ${unit.effectiveMaxHp}
               ${destroyedPct > 0 ? `<small class="destroyed-label">(-${destroyedPct}% Destroyed)</small>` : ""}
@@ -458,7 +558,7 @@ class GameApp {
 
     if (this.engine.winnerTeam) {
       actorHeaderEl.innerHTML = `<div class="winner-banner">🏆 Battle Finished — ${
-        this.engine.winnerTeam === 1 ? "Heroes Triumph!" : "Antikhonor Reigns Supreme!"
+        this.engine.winnerTeam === 1 ? "Strike Force Triumphs!" : "Raid Boss Reigns Supreme!"
       }</div>`;
       deckEl.innerHTML = "";
       return;
@@ -475,8 +575,7 @@ class GameApp {
         <span class="actor-big-avatar">${activeUnit.avatar}</span>
         <div>
           <h3>${activeUnit.name}'s Turn <small>(${activeUnit.forms[activeUnit.form]?.name || "Base"})</small></h3>
-          <p>Selected Target: <strong>${targetUnit ? `${targetUnit.avatar} ${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong>
-          ${activeUnit.templateId?.includes("antikhonor") ? ` • Skills Used: ${activeUnit.skillsUsedCount}` : ""}</p>
+          <p>Selected Target: <strong>${targetUnit ? `${targetUnit.avatar} ${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong></p>
         </div>
       </div>
       <div class="actor-banner-right">
@@ -539,7 +638,7 @@ class GameApp {
         <span class="inspector-avatar">${unit.avatar}</span>
         <div>
           <h4>${unit.name}</h4>
-          <small>Lv.${unit.level || 1} • ${unit.types.join(", ")} • ${species?.name || "Construct"}</small>
+          <small>${unit.title || unit.role} • ${unit.types.join(", ")}</small>
         </div>
       </div>
 
@@ -589,7 +688,7 @@ class GameApp {
 
     logContainer.innerHTML = [...this.engine.logs]
       .reverse()
-      .slice(0, 45)
+      .slice(0, 50)
       .map(
         (entry) => `
         <div class="log-line log-${entry.type}">
