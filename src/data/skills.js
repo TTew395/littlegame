@@ -281,13 +281,13 @@ export const SKILL_LIST = [
     element: "Death",
     category: "Physical",
     stab: true,
-    hits: 3,
+    hits: 2,
     energyCost: 30,
     accuracy: 100,
     targetType: "all_enemies",
-    formulaText: "1.5 x ATK (x3 hits, AoE)",
+    formulaText: "1.5 x ATK (x2 hits, AoE)",
     description:
-      "Attacks all enemies three times. Each hit ignores 4% of all targets' DEF for each War Armor stack on Antikhonor.",
+      "Attacks all enemies two times. Each hit ignores 4% of all targets' DEF for each War Armor stack on Antikhonor.",
     getIgnoreDefPct({ attacker, engine }) {
       const warArmorStacks = engine.statusManager.getStacks(attacker, "war_armor");
       return Math.min(1.0, warArmorStacks * 0.04);
@@ -1212,7 +1212,7 @@ export const SKILL_LIST = [
     targetType: "self",
     formulaText: "Requires <50% Total Bars (<=8 bars). Grants 7 Charging Bars + Restores 100% Enemy Energy",
     description:
-      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 charging HP bars (5 HP each) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 bars are broken first.",
+      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 charging HP bars (50 HP each) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 bars are broken first.",
     canUse({ attacker }) {
       const barsLeft = attacker.customCounters.hpBarsRemaining ?? 16;
       const maxBars = attacker.customCounters.maxHpBars ?? 16;
