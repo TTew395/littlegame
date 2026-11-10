@@ -6,6 +6,9 @@
  * 2. Serverless Manual SDP Offer/Answer Copy-Paste (Works with zero external signaling servers)
  */
 
+const MAX_ROOM_INACTIVITY_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+const ROOM_ACTIVITY_STORAGE_KEY = "anarch_p2p_room_activity_v1";
+
 export class P2PNetworkManager {
   constructor({ onStatusChange, onPeerConnected, onBattleStateReceived, onActionSubmitted }) {
     this.onStatusChange = onStatusChange || (() => {});
@@ -18,10 +21,65 @@ export class P2PNetworkManager {
     this.connections = [];
     this.hostConnection = null;
     this.roomId = null;
+    this.lastActivityTimestamp = Date.now();
+    this.inactivityCheckInterval = null;
 
     // Raw WebRTC fallback for manual copy-paste SDP signaling
     this.rawPc = null;
     this.rawChannel = null;
+
+    this.cleanupExpiredStoredRooms();
+    this.startInactivityWatchdog();
+  }
+
+  recordRoomActivity() {
+    this.lastActivityTimestamp = Date.now();
+    if (this.roomId) {
+      try {
+        const map = JSON.parse(localStorage.getItem(ROOM_ACTIVITY_STORAGE_KEY) || "{}");
+        map[this.roomId] = this.lastActivityTimestamp;
+        localStorage.setItem(ROOM_ACTIVITY_STORAGE_KEY, JSON.stringify(map));
+      } catch (_e) {
+        // Ignore storage errors
+      }
+    }
+  }
+
+  cleanupExpiredStoredRooms() {
+    try {
+      const now = Date.now();
+      const map = JSON.parse(localStorage.getItem(ROOM_ACTIVITY_STORAGE_KEY) || "{}");
+      let changed = false;
+      for (const [rId, ts] of Object.entries(map)) {
+        if (now - Number(ts) > MAX_ROOM_INACTIVITY_MS) {
+          delete map[rId];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem(ROOM_ACTIVITY_STORAGE_KEY, JSON.stringify(map));
+      }
+    } catch (_e) {
+      // Ignore storage errors
+    }
+  }
+
+  startInactivityWatchdog() {
+    if (this.inactivityCheckInterval) {
+      clearInterval(this.inactivityCheckInterval);
+    }
+    this.inactivityCheckInterval = setInterval(() => {
+      if (this.role === "offline") return;
+      const idleMs = Date.now() - (this.lastActivityTimestamp || Date.now());
+      if (idleMs >= MAX_ROOM_INACTIVITY_MS) {
+        const closedRoom = this.roomId || "P2P Session";
+        this.disconnect();
+        this.onStatusChange(
+          `Room ${closedRoom} closed automatically due to >48h inactivity.`,
+          "disconnected"
+        );
+      }
+    }, 60 * 1000);
   }
 
   async ensurePeerJsLoaded() {
@@ -51,12 +109,14 @@ export class P2PNetworkManager {
 
       this.peer.on("open", (id) => {
         this.roomId = id;
-        this.onStatusChange(`Hosting Room: ${id} (Waiting for peer...)`, "hosting");
+        this.recordRoomActivity();
+        this.onStatusChange(`Hosting Room: ${id} (Waiting for peer... 48h auto-close active)`, "hosting");
       });
 
       this.peer.on("connection", (conn) => {
         this.connections.push(conn);
         conn.on("open", () => {
+          this.recordRoomActivity();
           this.onStatusChange(`Peer Connected (${conn.peer})! WebRTC Active.`, "connected");
           this.onPeerConnected({ role: "host", peerId: conn.peer });
         });
@@ -203,6 +263,7 @@ export class P2PNetworkManager {
 
   handleIncomingMessage(msg) {
     if (!msg || !msg.type) return;
+    this.recordRoomActivity();
     if (msg.type === "BATTLE_STATE_SYNC") {
       this.onBattleStateReceived(msg.payload);
     } else if (msg.type === "ACTION_INTENT" && this.role === "host") {
@@ -212,6 +273,7 @@ export class P2PNetworkManager {
 
   broadcastBattleState(serializedState) {
     if (this.role !== "host") return;
+    this.recordRoomActivity();
     const packet = { type: "BATTLE_STATE_SYNC", payload: serializedState };
 
     this.connections.forEach((conn) => {
@@ -223,6 +285,7 @@ export class P2PNetworkManager {
   }
 
   sendActionIntent(action) {
+    this.recordRoomActivity();
     const packet = { type: "ACTION_INTENT", payload: action };
     if (this.hostConnection && this.hostConnection.open) {
       this.hostConnection.send(packet);

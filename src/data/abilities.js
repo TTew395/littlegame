@@ -1,5 +1,16 @@
 /**
  * Passive Abilities Registry (Emoji-free)
+ * Includes all Champions & Raid Bosses:
+ * - Karnage: Avatar of Anarchy
+ * - ByuN: Micro Jackson
+ * - Arix: Cursed Holder
+ * - Marius the Gallant: Steadfast Knight
+ * - Predator: Yautja Cloak
+ * - Solanar the Gleaming: Scholar of Sun
+ * - Debt-Bearer Alnith: Marker of Debt
+ * - Tethren Dragonsoul: Auric Soul
+ * - The Calamitus: Wrongly Created
+ * - All 7 Raid Bosses (Antikhonor, Ouroboros, Novok, Ternax, Zander, Allekheiros, Theridine)
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -13,13 +24,132 @@ export const ABILITY_LIST = [
     name: "Avatar of Anarchy",
     description:
       "Increases this character's C. DMG by 1 for every 3 points of SPD they have.",
-    modifyStats({ unit, stats }) {
+    modifyStats({ stats }) {
       stats.critDmg += Math.floor(stats.spd / 3);
     },
   },
 
   // ==========================================
-  // 2. UNIVERSAL / BOSS IMMUNITY TRAITS
+  // 2. NEW CHAMPIONS ABILITIES
+  // ==========================================
+  {
+    id: "micro_jackson",
+    name: "Micro Jackson",
+    description:
+      "Receives 15% less damage from AOE attacks. Whenever an ally is attacked, has a 20% chance of reducing incoming damage by 50% (once per attack). Whenever an enemy is attacked, has a 20% chance of joining in with the 2-Barrack Rush skill (0 Energy).",
+    modifyIncomingDamage({ attacker, defender, skill, damage, engine }) {
+      let out = damage;
+      if (skill?.targetType === "all_enemies") {
+        out *= 0.85;
+      }
+      return out;
+    },
+  },
+  {
+    id: "cursed_holder",
+    name: "Cursed Holder",
+    description:
+      "Deals 25% more damage when counterattacking. Counterattacks do not cost energy.",
+    modifyOutgoingDamage({ isCounter, damage }) {
+      return isCounter ? damage * 1.25 : damage;
+    },
+  },
+  {
+    id: "steadfast_knight",
+    name: "Steadfast Knight",
+    description:
+      "Immune to [Decrease SPD] and speed reduction effects. Whenever an enemy attempts to place one of these debuffs or switches Form, instantly counterattacks with the Auric Lance skill.",
+    immunities: ["spd_down", "windstruck"],
+  },
+  {
+    id: "yautja_cloak",
+    name: "Yautja Cloak",
+    description:
+      "At the start of battle, has a 50% chance to evade incoming skills (resets to base bonus upon taking a turn). Each time Predator kills an enemy, increases evasion by 20% (stacks up to 60%). Whenever Predator evades an enemy's skill, counterattacks with Wrist Blades.",
+    onBattleStart({ unit }) {
+      unit.customCounters.cloakStartEvasion = 50;
+      unit.customCounters.killEvasionBonus = 0;
+      unit.customCounters.movesUsedThisRound = new Set();
+    },
+    onTurnStart({ unit }) {
+      unit.customCounters.cloakStartEvasion = 0;
+    },
+    onKill({ unit, engine }) {
+      unit.customCounters.killEvasionBonus = Math.min(
+        60,
+        (unit.customCounters.killEvasionBonus || 0) + 20
+      );
+      engine.log(
+        `[${unit.name}] Yautja Cloak evasion bonus increases to +${unit.customCounters.killEvasionBonus}%.`,
+        "special"
+      );
+    },
+  },
+  {
+    id: "scholar_of_sun",
+    name: "Scholar of Sun",
+    description:
+      "Once per battle, if Solanar is dead when their last living ally dies, instantly revives Solanar with 75% HP, 75% energy, and grants an Instant Turn.",
+  },
+  {
+    id: "marker_of_debt",
+    name: "Marker of Debt",
+    description:
+      "Whenever Alnith attacks, 50% chance per hit (+5% per Blood-Due stack on enemy team, up to +25%) to place a random debuff for 1T: [Poison], [Burn], [Hemorrhage], [Acidic], [Windstruck], [Bleed], [Decay]. Whenever a debuff is placed on any enemy, also places 1 stack of [Blood-Due] (unresistable, max 15 on enemy team). Takes 3% less damage per [Blood-Due] on attacker (up to 15%). Heals by 4% of ATK per [Blood-Due] on target when attacking. On death (once per round), deals 5% MAX HP True DMG per [Blood-Due] stack (up to 25%), then clears all buffs/debuffs/Blood-Due and heals all units by 25% MAX HP.",
+    modifyIncomingDamage({ attacker, damage, engine }) {
+      const stacks = engine.statusManager.getStacks(attacker, "blood_due");
+      const red = Math.min(0.15, stacks * 0.03);
+      return damage * (1 - red);
+    },
+    onDeath({ unit, engine }) {
+      if (unit.customCounters.markerDeathTriggered) return;
+      unit.customCounters.markerDeathTriggered = true;
+
+      const enemies = engine.getLivingEnemiesOf(unit);
+      enemies.forEach((enemy) => {
+        const stacks = engine.statusManager.getStacks(enemy, "blood_due");
+        if (stacks > 0) {
+          const pct = Math.min(0.25, stacks * 0.05);
+          const dmg = Math.max(1, Math.floor(enemy.effectiveMaxHp * pct));
+          engine.dealTrueDamage(enemy, dmg, `Marker of Debt Death Reckoning (${stacks} Blood-Due)`);
+        }
+      });
+
+      engine.getLivingUnits().forEach((u) => {
+        u.statuses = [];
+        u.shieldHp = 0;
+        const heal = Math.floor(u.effectiveMaxHp * 0.25);
+        u.currentHp = Math.min(u.effectiveMaxHp, u.currentHp + heal);
+      });
+      engine.log(
+        `[${unit.name}] Marker of Debt Death Reckoning: cleared all statuses/Blood-Due and healed all survivors by 25% MAX HP.`,
+        "special"
+      );
+    },
+  },
+  {
+    id: "auric_soul",
+    name: "Auric Soul",
+    description:
+      "Allies take 10% less damage against enemies under [Burn] debuffs and deal 10% more damage against enemies under [Burn] debuffs. [Burn] debuffs placed on allies heal them instead of damaging them.",
+    modifyIncomingDamage({ attacker, damage, engine }) {
+      if (attacker && engine.statusManager.hasStatus(attacker, "burn")) {
+        return damage * 0.9;
+      }
+      return damage;
+    },
+  },
+  {
+    id: "wrongly_created",
+    name: "Wrongly Created",
+    description:
+      "Immune to [Decrease ATK] debuffs. Critical hits from The Calamitus deal double damage (2.0x) instead.",
+    immunities: ["atk_down"],
+    flags: { doubleCritDamage: true },
+  },
+
+  // ==========================================
+  // 3. UNIVERSAL / BOSS IMMUNITY TRAITS
   // ==========================================
   {
     id: "almighty_immunity",
@@ -68,7 +198,7 @@ export const ABILITY_LIST = [
   },
 
   // ==========================================
-  // 3. ANTIKHONOR, BROKEN GOD
+  // 4. RAID BOSS ABILITIES
   // ==========================================
   {
     id: "master_of_legions",
@@ -132,10 +262,6 @@ export const ABILITY_LIST = [
       }
     },
   },
-
-  // ==========================================
-  // 4. OUROBOROS, THE SWARM & SWARM SPAWN
-  // ==========================================
   {
     id: "brood_queen",
     name: "Brood Queen",
@@ -240,10 +366,6 @@ export const ABILITY_LIST = [
       });
     },
   },
-
-  // ==========================================
-  // 5. CRYPT-KEEPER NOVOK
-  // ==========================================
   {
     id: "gravewalker",
     name: "Gravewalker",
@@ -304,20 +426,12 @@ export const ABILITY_LIST = [
       );
     },
   },
-
-  // ==========================================
-  // 6. TERNAX HELLFIRE
-  // ==========================================
   {
     id: "lethal_lava",
     name: "Lethal Lava",
     description:
       "Whenever Ternax receives a [Burn] debuff, instantly removes it and heals Ternax by 10% of MAX HP. When attacking enemies under [Hex], ignores 50% DEF, [Block Damage], [Shield], and [Unkillable] buffs. Regenerates 5 Energy whenever any character takes damage from [Burn] debuffs.",
   },
-
-  // ==========================================
-  // 7. FIRST GENIUS, ZANDER (BASE & EVOLUTION)
-  // ==========================================
   {
     id: "genius_foresight",
     name: "Genius's Foresight",
@@ -340,10 +454,6 @@ export const ABILITY_LIST = [
     description:
       "Replaces Transmutation Counter with Termination Counter (set to 8). Decreases by 1 each time Zander takes a turn in Evolution state. At 0, activates Cyclicity: Alpha Scepter and returns Zander to Base Form.",
   },
-
-  // ==========================================
-  // 8. ALLEKHEIROS, ETERNAL GUARDIAN
-  // ==========================================
   {
     id: "forever_waiting",
     name: "Forever Waiting",
@@ -354,7 +464,7 @@ export const ABILITY_LIST = [
         forceProtected: true,
       });
     },
-    onAfterSkillAttacked({ attacker, defender, engine }) {
+    onAfterSkillAttacked({ defender, engine }) {
       if (defender.currentHp <= 0) return;
 
       if (engine.statusManager.hasStatus(defender, "silent_charging")) {
@@ -378,10 +488,6 @@ export const ABILITY_LIST = [
       }
     },
   },
-
-  // ==========================================
-  // 9. THERIDINE, GREAT SEPTIMUS
-  // ==========================================
   {
     id: "godspawn",
     name: "Godspawn",
@@ -398,10 +504,6 @@ export const ABILITY_LIST = [
       );
     },
   },
-
-  // ==========================================
-  // ADDITIONAL EXPANDABLE HERO PASSIVES
-  // ==========================================
   {
     id: "temporal_overdrive",
     name: "Temporal Overdrive",

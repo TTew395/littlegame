@@ -39,6 +39,10 @@ export class StatusManager {
         return true;
       }
     }
+    const item = this.engine.getActiveItem(target);
+    if (item && item.immunities && item.immunities.includes(statusId)) {
+      return true;
+    }
     return false;
   }
 
@@ -52,9 +56,10 @@ export class StatusManager {
       isProtected = false,
       bypassImmunity = false,
       silent = false,
+      isReflected = false,
     } = {}
   ) {
-    if (target.currentHp <= 0) return false;
+    if (!target || target.currentHp <= 0) return false;
     const def = Registry.getStatus(statusId);
     if (!def) return false;
 
@@ -77,6 +82,19 @@ export class StatusManager {
         if (!silent) {
           this.engine.log(`${target.name} is immune to [${def.name}].`, "info");
         }
+        // Marius the Gallant's Steadfast Knight: counterattack with Auric Lance when enemy attempts to place [Decrease SPD]
+        if (
+          statusId === "spd_down" &&
+          source &&
+          source.teamId !== target.teamId &&
+          this.engine.hasAbilityFlag(target, "counterOnSpdDownAttempt")
+        ) {
+          this.engine.log(
+            `[${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`,
+            "special"
+          );
+          this.engine.executeCounterSkill(target, "auric_lance", source.id);
+        }
         return false;
       }
       if (this.hasFlag(target, "blockDebuffs")) {
@@ -88,6 +106,72 @@ export class StatusManager {
         }
         return false;
       }
+
+      // Unbroken Sheath: 30% chance to block incoming debuffs
+      const targetItem = this.engine.getActiveItem(target);
+      if (targetItem && targetItem.id === "unbroken_sheath" && this.engine.rng() < 0.3) {
+        if (!silent) {
+          this.engine.log(
+            `${target.name}'s [Unbroken Sheath] blocked [${def.name}].`,
+            "info"
+          );
+        }
+        return false;
+      }
+
+      // Wand of Submission: 50% chance to reflect debuff back onto attacker
+      if (
+        !isReflected &&
+        targetItem &&
+        targetItem.id === "wand_of_submission" &&
+        source &&
+        source.id !== target.id &&
+        this.engine.rng() < 0.5
+      ) {
+        this.engine.log(
+          `${target.name}'s [Wand of Submission] reflects [${def.name}] back onto ${source.name}!`,
+          "special"
+        );
+        return this.applyStatus(target, source, statusId, {
+          duration,
+          stacks,
+          isProtected,
+          bypassImmunity,
+          silent,
+          isReflected: true,
+        });
+      }
+    }
+
+    // Item status amplifiers: Blossoming Spore Rod (30% chance to double debuff) & That-One-Double-Effect-Orb
+    let effectiveStacks = stacks;
+    let effectiveDuration = duration;
+    const sourceItem = source ? this.engine.getActiveItem(source) : null;
+    if (
+      def.category === "debuff" &&
+      sourceItem &&
+      sourceItem.id === "blossoming_spore_rod" &&
+      this.engine.rng() < 0.3
+    ) {
+      if (def.stackBehavior === "stack") {
+        effectiveStacks *= 2;
+      } else if (effectiveDuration !== null) {
+        effectiveDuration *= 2;
+      }
+      if (!silent) {
+        this.engine.log(
+          `[${source.name}] Blossoming Spore Rod doubles [${def.name}]!`,
+          "special"
+        );
+      }
+    }
+    const targetItem = this.engine.getActiveItem(target);
+    if (targetItem && targetItem.id === "that_one_double_effect_orb") {
+      if (def.stackBehavior === "stack") {
+        effectiveStacks *= 2;
+      } else if (effectiveDuration !== null) {
+        effectiveDuration *= 2;
+      }
     }
 
     const protectedFlag = Boolean(isProtected || def.isProtectedByDefault);
@@ -95,14 +179,17 @@ export class StatusManager {
 
     if (existing) {
       if (def.stackBehavior === "stack") {
-        existing.stacks = Math.min(def.maxStacks || 99, existing.stacks + stacks);
-        if (duration !== null) {
-          existing.duration = Math.max(existing.duration ?? 0, duration);
+        existing.stacks = Math.min(
+          def.maxStacks || 99,
+          existing.stacks + effectiveStacks
+        );
+        if (effectiveDuration !== null) {
+          existing.duration = Math.max(existing.duration ?? 0, effectiveDuration);
         }
         existing.isProtected = existing.isProtected || protectedFlag;
       } else {
-        if (duration !== null) {
-          existing.duration = Math.max(existing.duration ?? 0, duration);
+        if (effectiveDuration !== null) {
+          existing.duration = Math.max(existing.duration ?? 0, effectiveDuration);
         }
         existing.isProtected = existing.isProtected || protectedFlag;
       }
@@ -115,9 +202,9 @@ export class StatusManager {
         tickTiming: def.tickTiming,
         stacks:
           def.stackBehavior === "stack"
-            ? Math.min(def.maxStacks || 99, stacks)
+            ? Math.min(def.maxStacks || 99, effectiveStacks)
             : 1,
-        duration: def.tickTiming === "NEVER" ? null : duration,
+        duration: def.tickTiming === "NEVER" ? null : effectiveDuration,
         isProtected: protectedFlag,
       });
     }
@@ -125,7 +212,9 @@ export class StatusManager {
     if (!silent) {
       const protText = protectedFlag ? " [PROTECTED]" : "";
       const durText =
-        def.tickTiming === "NEVER" || duration === null ? "" : ` (${duration}T)`;
+        def.tickTiming === "NEVER" || effectiveDuration === null
+          ? ""
+          : ` (${effectiveDuration}T)`;
       const stackText =
         def.stackBehavior === "stack"
           ? ` [x${this.getStacks(target, statusId)}]`
@@ -135,6 +224,33 @@ export class StatusManager {
         def.category === "debuff" ? "status" : "info"
       );
     }
+
+    // Debt-Bearer Alnith's Marker of Debt: whenever a debuff is placed on an enemy, apply 1 stack of [Blood Due]
+    if (def.category === "debuff" && statusId !== "blood_due") {
+      const opposingAlniths = this.engine
+        .getLivingEnemiesOf(target)
+        .filter((u) => this.engine.hasAbilityFlag(u, "applyBloodDueOnDebuff"));
+      if (opposingAlniths.length > 0) {
+        this.engine.addBloodDueStack(opposingAlniths[0], target, 1);
+      }
+    }
+
+    // Solanar the Gleaming's Scholar of the Sun: 20% chance to counterattack with [Solar Nova] when an enemy receives a buff
+    if (def.category === "buff") {
+      const opposingSolanars = this.engine
+        .getLivingEnemiesOf(target)
+        .filter((u) => this.engine.hasAbilityFlag(u, "counterOnEnemyExtraTurnOrBuff"));
+      for (const solanar of opposingSolanars) {
+        if (this.engine.rng() < 0.2) {
+          this.engine.log(
+            `[${solanar.name}] Scholar of the Sun reacts to ${target.name}'s [${def.name}] and counterattacks with [Solar Nova]!`,
+            "special"
+          );
+          this.engine.executeCounterSkill(solanar, "solar_nova", target.id);
+        }
+      }
+    }
+
     return true;
   }
 
@@ -205,6 +321,20 @@ export class StatusManager {
           }
           const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
           this.engine.dealTrueDamage(unit, dmg, `Bleed x${st.stacks}`);
+        } else if (st.id === "poison_dot") {
+          let pct = 0.03 * st.stacks;
+          if (this.engine.hasAbilityFlag(unit, "capEnemyMaxHpScalingPct")) {
+            pct = Math.min(pct, 0.1);
+          }
+          const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
+          this.engine.dealTrueDamage(unit, dmg, `Poison x${st.stacks}`);
+        } else if (st.id === "hemorrhage") {
+          let pct = 0.04 * st.stacks;
+          if (this.engine.hasAbilityFlag(unit, "capEnemyMaxHpScalingPct")) {
+            pct = Math.min(pct, 0.1);
+          }
+          const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
+          this.engine.dealTrueDamage(unit, dmg, `Hemorrhage x${st.stacks}`);
         } else if (st.id === "burn") {
           this.engine.triggerBurnTick(unit);
         }

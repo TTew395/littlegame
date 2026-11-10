@@ -1,10 +1,23 @@
 /**
- * Species / Archetype Definitions
+ * Species / Archetype Definitions (Emoji-free)
  */
 
 import { Registry } from "../engine/Registry.js";
 
 export const SPECIES_LIST = [
+  {
+    id: "none",
+    name: "None",
+    description: "No special species bonuses.",
+    damageReductionByType: {},
+  },
+  {
+    id: "human",
+    name: "Human",
+    description: "10% more damage on basic moves, no downside.",
+    basicMoveDamageBonus: 0.1,
+    damageReductionByType: {},
+  },
   {
     id: "higher_being",
     name: "Higher Being",

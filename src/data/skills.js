@@ -1421,6 +1421,955 @@ export const SKILL_LIST = [
       }
     },
   },
+
+  // ==========================================================
+  // ITEM REPLACEMENT SKILLS (Glock 17 Shoot & Black Knife Dark Fountain)
+  // ==========================================================
+  {
+    id: "glock_shoot",
+    name: "Shoot (Glock 17)",
+    element: "Fire",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 10,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "30 Flat Steel/Fire Damage",
+    description: "Fires a Glock 17 round for 30 Steel/Fire damage (10 Energy, 100% Accuracy).",
+    computeRawHit() {
+      return 30;
+    },
+  },
+  {
+    id: "dark_fountain",
+    name: "Dark Fountain",
+    element: "Chaos",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 35,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "1.8 x ATK (x2 hits AoE) + [Decrease DEF]",
+    description: "Opens a Dark Fountain to strike all enemies twice and inflict [Decrease DEF] for 2 turns.",
+    computeRawHit({ stats }) {
+      return 1.8 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
+      }
+    },
+  },
+
+  // ==========================================================
+  // 9. BYUN MOVES
+  // ==========================================================
+  {
+    id: "two_barrack_rush",
+    name: "2-Barrack Rush",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "all_enemies",
+    formulaText: "1 x ATK (AoE)",
+    description: "Attacks all enemies.",
+    computeRawHit({ stats }) {
+      return 1.0 * stats.atk;
+    },
+  },
+  {
+    id: "mech_army",
+    name: "Mech Army",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 2,
+    energyCost: 50,
+    accuracy: 80,
+    targetType: "all_enemies",
+    formulaText: "1.5 x ATK x 2 (AoE)",
+    description: "Attacks all enemies two times.",
+    computeRawHit({ stats }) {
+      return 1.5 * stats.atk;
+    },
+  },
+  {
+    id: "high_ground_siege",
+    name: "High Ground Siege",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    energyCost: 50,
+    accuracy: null,
+    targetType: "self",
+    formulaText: "+60% DEF (2T) + +50% ATK (1T) + Extra Turn",
+    description:
+      "Places a 60% [Increase DEF] buff on this character for 2 turns, and a 50% [Increase ATK] buff on them for 1 turn. Then grants an Extra Turn.",
+    execute({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "def_up", { duration: 2 });
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 1 });
+      engine.grantExtraTurn(attacker);
+      engine.log(
+        `[${attacker.name}] High Ground Siege: applied [+DEF] (2T), [+ATK] (1T), and granted an Extra Turn.`,
+        "special"
+      );
+    },
+  },
+  {
+    id: "fusion_core",
+    name: "FUSION CORE!!!",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 80,
+    accuracy: 90,
+    targetType: "single_enemy",
+    formulaText: "4 x ATK (Ignores 50% DEF)",
+    description: "Attacks one enemy. Will ignore 50% of the target's DEF.",
+    getIgnoreDefPct() {
+      return 0.5;
+    },
+    computeRawHit({ stats }) {
+      return 4.0 * stats.atk;
+    },
+  },
+
+  // ==========================================================
+  // 10. ARIX MOVES
+  // ==========================================================
+  {
+    id: "purification",
+    name: "Purification",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "all_enemies",
+    formulaText: "0.2 x MAX HP (AoE)",
+    description: "Attacks all enemies for 0.2 x HP.",
+    computeRawHit({ attacker }) {
+      return 0.2 * attacker.effectiveMaxHp;
+    },
+  },
+  {
+    id: "unholy_contract",
+    name: "Unholy Contract",
+    element: "None",
+    category: "Status",
+    stab: false,
+    energyCost: 40,
+    accuracy: null,
+    targetType: "self",
+    formulaText: "Places [Counterattack] Buff (2T)",
+    description: "Places a [Counterattack] buff on this character for 2 turns.",
+    execute({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "counterattack", { duration: 2 });
+    },
+  },
+  {
+    id: "thornchain_malice",
+    name: "Thornchain Malice",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 50,
+    accuracy: 60,
+    targetType: "all_enemies",
+    formulaText: "0.3 x MAX HP (AoE, 20% [Stun] 1T)",
+    description: "Attacks all enemies. Has a 20% chance to place a [Stun] debuff for 1 turn.",
+    computeRawHit({ attacker }) {
+      return 0.3 * attacker.effectiveMaxHp;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && engine.rng() <= 0.2) {
+        engine.statusManager.applyStatus(attacker, target, "stun", { duration: 1 });
+      }
+    },
+  },
+  {
+    id: "single_combat",
+    name: "Single Combat",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 30,
+    accuracy: 60,
+    targetType: "single_enemy",
+    formulaText: "0.24 x MAX HP (Ignores 50% DEF if target HP < Arix HP)",
+    description:
+      "Attacks one enemy. Will ignore 50% of the target's DEF if the target's HP is less than this character's.",
+    getIgnoreDefPct({ attacker, target }) {
+      return target.currentHp < attacker.currentHp ? 0.5 : 0;
+    },
+    computeRawHit({ attacker }) {
+      return 0.24 * attacker.effectiveMaxHp;
+    },
+  },
+
+  // ==========================================================
+  // 11. MARIUS THE GALLANT MOVES
+  // ==========================================================
+  {
+    id: "auric_lance",
+    name: "Auric Lance",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "all_enemies",
+    formulaText: "1 x DEF (AoE)",
+    description: "Attacks all enemies based on Defense.",
+    computeRawHit({ stats }) {
+      return 1.0 * Math.max(1, stats.def);
+    },
+  },
+  {
+    id: "death_or_glory",
+    name: "Death or Glory",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 3,
+    energyCost: 40,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "(1 x DEF + 0.1 x ENEMY MAX HP) x 3 (Reduces Buff Durations by 1T per hit)",
+    description:
+      "Attacks all enemies 3 times. Each hit decreases the duration of all buffs on all enemies by 1 turn.",
+    computeRawHit({ stats, target, engine }) {
+      let enemyHpPart = 0.1 * target.effectiveMaxHp;
+      if (engine.hasAbilityFlag(target, "capEnemyMaxHpScalingPct")) {
+        enemyHpPart = Math.min(enemyHpPart, target.effectiveMaxHp * 0.033);
+      }
+      return 1.0 * Math.max(1, stats.def) + enemyHpPart;
+    },
+    onEachHit({ target }) {
+      if (target.currentHp <= 0) return;
+      target.statuses.forEach((st) => {
+        if (st.category === "buff" && st.duration !== null && st.duration > 0) {
+          st.duration = Math.max(0, st.duration - 1);
+        }
+      });
+      target.statuses = target.statuses.filter(
+        (st) => st.duration === null || st.duration > 0
+      );
+    },
+  },
+  {
+    id: "galloping_thunder",
+    name: "Galloping Thunder",
+    element: "Fighting",
+    category: "Status",
+    stab: false,
+    energyCost: 60,
+    accuracy: 80,
+    targetType: "single_enemy",
+    formulaText: "[Stun] Target (1T) + [+60% DEF] Self (2T) + Extra Turn",
+    description:
+      "Places a [Stun] debuff for 1 turn on the target and places a 60% [Increase DEF] buff on this character for 2 turns. Then grants an Extra Turn.",
+    execute({ attacker, targets, engine }) {
+      const target = targets[0];
+      if (target && engine.rng() <= 0.8) {
+        engine.statusManager.applyStatus(attacker, target, "stun", { duration: 1 });
+      }
+      engine.statusManager.applyStatus(attacker, attacker, "def_up", { duration: 2 });
+      engine.grantExtraTurn(attacker);
+    },
+  },
+  {
+    id: "knight_of_honor",
+    name: "Knight of Honor",
+    element: "Fighting",
+    category: "Melee",
+    stab: true,
+    hits: 1,
+    energyCost: 50,
+    accuracy: 70,
+    bypassUnkillable: true,
+    targetType: "all_enemies",
+    formulaText: "1.5 x DEF + 0.1 x ENEMY MAX HP (AoE, Ignores [Unkillable])",
+    description: "Attacks all enemies. Will ignore [Unkillable] buffs.",
+    computeRawHit({ stats, target, engine }) {
+      let enemyHpPart = 0.1 * target.effectiveMaxHp;
+      if (engine.hasAbilityFlag(target, "capEnemyMaxHpScalingPct")) {
+        enemyHpPart = Math.min(enemyHpPart, target.effectiveMaxHp * 0.1);
+      }
+      return 1.5 * Math.max(1, stats.def) + enemyHpPart;
+    },
+  },
+
+  // ==========================================================
+  // 12. PREDATOR MOVES
+  // ==========================================================
+  {
+    id: "wrist_blades",
+    name: "Wrist Blades",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "0.1 x MAX HP (Heals 30% of DMG dealt)",
+    description: "Attacks one enemy. Heals this character by 30% of the damage dealt.",
+    computeRawHit({ attacker }) {
+      return 0.1 * attacker.effectiveMaxHp;
+    },
+    onAfterHit({ attacker, totalDamageToTarget, engine }) {
+      if (totalDamageToTarget > 0 && attacker.currentHp > 0) {
+        const heal = Math.max(1, Math.floor(totalDamageToTarget * 0.3));
+        attacker.currentHp = Math.min(attacker.effectiveMaxHp, attacker.currentHp + heal);
+        engine.log(`[${attacker.name}] Wrist Blades heals ${heal} HP.`, "heal");
+      }
+    },
+  },
+  {
+    id: "smart_disk",
+    name: "Smart Disk",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 2,
+    energyCost: 50,
+    accuracy: 80,
+    targetType: "all_enemies",
+    formulaText: "0.2 x MAX HP x 2 (AoE Ricochet Scaling)",
+    description:
+      "Attacks all enemies 2 times. Hit 1 deals +100% damage to primary target (+75% to 2nd, +50% to 3rd...). Hit 2 deals base damage to primary and +25% per subsequent target.",
+    computeRawHit({ attacker, hitIndex }) {
+      const base = 0.2 * attacker.effectiveMaxHp;
+      return hitIndex === 0 ? base * 1.75 : base * 1.35;
+    },
+  },
+  {
+    id: "combstick_throw",
+    name: "Combstick Throw",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 60,
+    targetType: "single_enemy",
+    formulaText: "0.38 x MAX HP (Kill -> [Block Revive]; Survive -> +100% SPD 1T)",
+    description:
+      "Attacks 1 enemy. If this attack kills an enemy, places [Block Revive] on them. If it does not kill, boosts Predator's SPD by 100% until next turn.",
+    computeRawHit({ attacker }) {
+      return 0.38 * attacker.effectiveMaxHp;
+    },
+    onTargetKilled({ target, engine }) {
+      target.blockRevive = true;
+      engine.log(`[BLOCK REVIVE] ${target.name} slain by Combstick Throw.`, "crit");
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && attacker.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, attacker, "predator_sprint", {
+          duration: 1,
+        });
+      }
+    },
+  },
+  {
+    id: "alpha_predator",
+    name: "Alpha Predator",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 70,
+    targetType: "single_enemy",
+    formulaText: "Secret Skill: [Deathbrand] + 0.2 x MAX HP (Up to 100% Ignore DEF; Kill -> [Unkillable], Survive -> Free Smart Disk)",
+    description:
+      "Secret Skill (Unlocked after using Wrist Blades, Smart Disk, and Combstick Throw). Places [Deathbrand] (2T) before attacking. Ignores 50% DEF if target HP < Predator HP, and +50% DEF if target SPD > Predator SPD. Kill grants [Unkillable] (1T); if target survives, casts Smart Disk for 0 Energy.",
+    canUse({ attacker }) {
+      const usedSet = attacker.customCounters.predatorMovesUsed || [];
+      const hasAllThree =
+        usedSet.includes("wrist_blades") &&
+        usedSet.includes("smart_disk") &&
+        usedSet.includes("combstick_throw");
+      if (!hasAllThree) {
+        return {
+          allowed: false,
+          reason: `Secret Skill: Use Wrist Blades, Smart Disk & Combstick Throw first (${usedSet.length}/3)`,
+        };
+      }
+      return { allowed: true };
+    },
+    onBeforeAttack({ attacker, target, engine }) {
+      engine.statusManager.applyStatus(attacker, target, "deathbrand", { duration: 2 });
+    },
+    getIgnoreDefPct({ attacker, target, engine }) {
+      let ign = 0;
+      if (target.currentHp < attacker.currentHp) ign += 0.5;
+      if (engine.getEffectiveStats(target).spd > engine.getEffectiveStats(attacker).spd) {
+        ign += 0.5;
+      }
+      return Math.min(1.0, ign);
+    },
+    computeRawHit({ attacker }) {
+      return 0.2 * attacker.effectiveMaxHp;
+    },
+    onTargetKilled({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "unkillable", { duration: 1 });
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && attacker.currentHp > 0) {
+        engine.log(
+          `[${attacker.name}] Target survived Alpha Predator -> Instantly activates [Smart Disk]!`,
+          "special"
+        );
+        engine.executeCounterSkill(attacker, "smart_disk");
+      }
+    },
+  },
+
+  // ==========================================================
+  // 13. SOLANAR THE GLEAMING MOVES
+  // ==========================================================
+  {
+    id: "solar_nova",
+    name: "Solar Nova",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 1,
+    energyCost: 30,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "all_enemies",
+    formulaText: "1.5 x ATK (AoE + 20% Counter on Enemy Extra Turn/Buff)",
+    description:
+      "Attacks all enemies. Whenever an enemy gets an Extra Turn, Instant Turn, or receives a buff, Solanar has a 20% chance of counterattacking with this skill.",
+    computeRawHit({ stats }) {
+      return 1.5 * stats.atk;
+    },
+  },
+  {
+    id: "blazing_force",
+    name: "Blazing Force",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 1,
+    energyCost: 75,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "Steals All Target Buffs (Unresistable) + 3 x ATK",
+    description:
+      "Attacks 1 enemy. Before attacking, steals all buffs from the target (cannot be resisted).",
+    onBeforeAttack({ attacker, target, engine }) {
+      const stolen = target.statuses.filter(
+        (s) => s.category === "buff" && !s.isProtected
+      );
+      if (stolen.length > 0) {
+        target.statuses = target.statuses.filter(
+          (s) => !(s.category === "buff" && !s.isProtected)
+        );
+        stolen.forEach((b) => {
+          engine.statusManager.applyStatus(attacker, attacker, b.id, {
+            duration: b.duration || 2,
+            stacks: b.stacks || 1,
+            silent: true,
+          });
+        });
+        engine.log(
+          `[${attacker.name}] Blazing Force steals ${stolen.length} buff(s) from ${target.name}!`,
+          "special"
+        );
+      }
+    },
+    computeRawHit({ stats }) {
+      return 3.0 * stats.atk;
+    },
+  },
+  {
+    id: "sunfury",
+    name: "Sunfury",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 45,
+    accuracy: 80,
+    targetType: "single_enemy",
+    formulaText: "2.5 x ATK (Ignores 100% DEF)",
+    description: "Attacks 1 enemy. Will ignore target DEF.",
+    getIgnoreDefPct() {
+      return 1.0;
+    },
+    computeRawHit({ stats }) {
+      return 2.5 * stats.atk;
+    },
+  },
+  {
+    id: "unfettered_radiance",
+    name: "Unfettered Radiance",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 2,
+    energyCost: 60,
+    accuracy: 60,
+    targetType: "single_enemy",
+    formulaText: "75% [Block Passive Skills] (1T) + 2.1 x ATK x 2 (Hit 1: 30% Ignore DEF)",
+    description:
+      "Attacks 1 enemy 2 times. Before attacking, has a 75% chance to place [Block Passive Skills] for 1 turn. Hit 1 ignores 30% DEF; Hit 2 cannot be evaded.",
+    onBeforeAttack({ attacker, target, engine }) {
+      if (engine.rng() <= 0.75) {
+        engine.statusManager.applyStatus(attacker, target, "block_passive_skills", {
+          duration: 1,
+        });
+      }
+    },
+    getIgnoreDefPct({ hitIndex }) {
+      return hitIndex === 0 ? 0.3 : 0;
+    },
+    computeRawHit({ stats }) {
+      return 2.1 * stats.atk;
+    },
+  },
+
+  // ==========================================================
+  // 14. DEBT-BEARER ALNITH MOVES
+  // ==========================================================
+  {
+    id: "crescent_cut",
+    name: "Crescent Cut",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 80,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "1.5 x ATK + 1 [Blood-Due]",
+    description: "Attacks one enemy. Places a [Blood-Due] stack on the target.",
+    computeRawHit({ stats }) {
+      return 1.5 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.addBloodDueStack(attacker, target, 1);
+      }
+    },
+  },
+  {
+    id: "bloody_typhoon",
+    name: "Bloody Typhoon",
+    element: "Fighting",
+    category: "Melee",
+    stab: true,
+    hits: 1,
+    energyCost: 25,
+    accuracy: 75,
+    targetType: "single_enemy",
+    formulaText: "1.5 x ATK Single + 1.5 x ATK AoE (Places [Blood-Due] on each hit)",
+    description:
+      "Attacks 1 enemy, then attacks all enemies. Each hit places a [Blood-Due] stack on each target.",
+    computeRawHit({ stats }) {
+      return 1.5 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.addBloodDueStack(attacker, target, 1);
+      }
+    },
+    onAfterSkill({ attacker, engine }) {
+      const enemies = engine.getLivingEnemiesOf(attacker);
+      enemies.forEach((e) => {
+        engine.executeBonusHit({
+          attacker,
+          target: e,
+          element: "Fighting",
+          stab: true,
+          rawMultiplier: 1.5,
+          ignoreDefPct: 0,
+          label: "Bloody Typhoon AoE",
+        });
+        if (e.currentHp > 0) {
+          engine.addBloodDueStack(attacker, e, 1);
+        }
+      });
+    },
+  },
+  {
+    id: "quick_draw",
+    name: "Quick Draw",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 30,
+    accuracy: 80,
+    targetType: "single_enemy",
+    formulaText: "2.5 x ATK x 2 (Ignores 5% DEF per [Blood-Due] stack)",
+    description:
+      "Attacks 1 enemy 2 times. Ignores 5% of the target's DEF for each [Blood-Due] stack on them.",
+    getIgnoreDefPct({ target, engine }) {
+      const stacks = engine.statusManager.getStacks(target, "blood_due");
+      return Math.min(1.0, stacks * 0.05);
+    },
+    computeRawHit({ stats }) {
+      return 2.5 * stats.atk;
+    },
+  },
+  {
+    id: "debt_repaid",
+    name: "Debt Repaid",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "Secret Skill (Requires 15 Total [Blood-Due]): 3-Phase Execution Combo",
+    description:
+      "Secret Skill: Unlocked when 15 [Blood-Due] stacks are accumulated on the enemy team. Hit 1 strikes target (+20% ATK & 10% Ignore DEF per Blood-Due, up to 100%/50%), removes 5 Blood-Due, then hits all enemies (+2% MAX HP True DMG per debuff, or +20% DMG per debuff vs Bosses), then hits all enemies again (2x DMG if they have Blood-Due) and consumes all Blood-Due stacks.",
+    canUse({ attacker, engine }) {
+      const totalBloodDue = engine.getTotalEnemyBloodDue(attacker);
+      if (totalBloodDue < 15) {
+        return {
+          allowed: false,
+          reason: `Secret Skill: Requires 15 total [Blood-Due] stacks (${totalBloodDue}/15)`,
+        };
+      }
+      return { allowed: true };
+    },
+    getIgnoreDefPct({ target, engine }) {
+      const stacks = engine.statusManager.getStacks(target, "blood_due");
+      return Math.min(0.5, stacks * 0.1);
+    },
+    computeRawHit({ stats, target, engine }) {
+      const stacks = engine.statusManager.getStacks(target, "blood_due");
+      const debuffs = engine.statusManager.countCategory(target, "debuff");
+      let base = 2.0 * stats.atk * (1 + Math.min(1.0, stacks * 0.2));
+      if (target.isBoss) {
+        base *= 1 + Math.min(1.0, debuffs * 0.2);
+      }
+      return base;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      const cur = engine.statusManager.getStacks(target, "blood_due");
+      engine.statusManager.setStatusStacks(target, "blood_due", Math.max(0, cur - 5), {
+        isProtected: true,
+      });
+    },
+    onAfterSkill({ attacker, engine }) {
+      const enemies = engine.getLivingEnemiesOf(attacker);
+      // Wave 2 & Wave 3 AoE
+      enemies.forEach((e) => {
+        if (e.currentHp <= 0) return;
+        const debuffs = engine.statusManager.countCategory(e, "debuff");
+        if (!e.isBoss && debuffs > 0) {
+          const pct = Math.min(0.1, debuffs * 0.02);
+          engine.dealTrueDamage(
+            e,
+            Math.max(1, Math.floor(e.effectiveMaxHp * pct)),
+            "Debt Repaid (Debuff True DMG)"
+          );
+        }
+        if (e.currentHp > 0) {
+          const hasDue = engine.statusManager.getStacks(e, "blood_due") > 0;
+          engine.executeBonusHit({
+            attacker,
+            target: e,
+            element: "Fighting",
+            stab: true,
+            rawMultiplier: hasDue ? 3.0 : 1.5,
+            ignoreDefPct: 0.3,
+            label: "Debt Repaid Finale",
+          });
+          engine.statusManager.removeStatus(e, "blood_due", { forceProtected: true });
+        }
+      });
+    },
+  },
+
+  // ==========================================================
+  // 15. TETHREN DRAGONSOUL MOVES
+  // ==========================================================
+  {
+    id: "flamebolt",
+    name: "Flamebolt",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 80,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "0.1 x MAX HP + [Burn] (2T)",
+    description: "Attacks one enemy. Places a [Burn] debuff for 2 turns.",
+    computeRawHit({ attacker }) {
+      return 0.1 * attacker.effectiveMaxHp;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "burn", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "by_fire_be_healed",
+    name: "By Fire Be Healed",
+    element: "Fighting",
+    category: "Status",
+    stab: false,
+    energyCost: 25,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "Guaranteed [Burn] on All Allies (3T, Heals via Auric Soul) + [Burn] on All Enemies (3T)",
+    description:
+      "Places a guaranteed [Burn] debuff on all allies for 3 turns (which heals them via Auric Soul). Then places a [Burn] debuff on all enemies for 3 turns.",
+    execute({ attacker, engine }) {
+      engine.getLivingAlliesOf(attacker).forEach((ally) => {
+        engine.statusManager.applyStatus(attacker, ally, "burn", {
+          duration: 3,
+          bypassImmunity: true,
+        });
+      });
+      engine.getLivingEnemiesOf(attacker).forEach((enemy) => {
+        engine.statusManager.applyStatus(attacker, enemy, "burn", { duration: 3 });
+      });
+    },
+  },
+  {
+    id: "by_fire_be_broken",
+    name: "By Fire Be Broken",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 30,
+    accuracy: 80,
+    targetType: "all_enemies",
+    formulaText: "0.15 x MAX HP (Ticks [Burn] on burning targets; 2x DMG + [Burn] 2T on non-burning targets)",
+    description:
+      "Attacks all enemies under [Burn] and activates 1 tick of [Burn]. Attacks all enemies not under [Burn] for double damage and places [Burn] for 2 turns.",
+    computeRawHit({ attacker, target, engine }) {
+      const hasBurn = engine.statusManager.hasStatus(target, "burn");
+      return 0.15 * attacker.effectiveMaxHp * (hasBurn ? 1.0 : 2.0);
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) return;
+      if (engine.statusManager.hasStatus(target, "burn")) {
+        engine.triggerBurnTick(target);
+      } else {
+        engine.statusManager.applyStatus(attacker, target, "burn", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "flame_consume_you",
+    name: "Flame Consume You",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 100,
+    targetType: "any_unit",
+    formulaText: "Versatile: Ally (Full Heal+Instant Turn or 50% Revive) | Enemy (0.2x HP, 100% Ignore DEF/Shields vs [Burn] or AoE)",
+    description:
+      "Can target allies or enemies: Living Ally -> Full Heal, Instant Turn & [Burn] (2T); Dead Ally -> Revive at 50% HP/Energy & [Burn] (2T); Living Enemy -> Ignores 100% DEF/Shield/Block Damage/Unkillable if under [Burn], or AoE 50% Ignore DEF if not.",
+    execute({ attacker, targets, engine }) {
+      const target = targets[0];
+      if (!target) return;
+
+      if (target.teamId === attacker.teamId) {
+        if (target.currentHp <= 0 && !target.blockRevive) {
+          target.currentHp = Math.max(1, Math.floor(target.effectiveMaxHp * 0.5));
+          target.currentEnergy = Math.floor(target.maxEnergy * 0.5);
+          engine.statusManager.applyStatus(attacker, target, "burn", {
+            duration: 2,
+            bypassImmunity: true,
+          });
+          engine.log(
+            `[${attacker.name}] Flame Consume You revives ${target.name} at 50% HP/Energy!`,
+            "heal"
+          );
+        } else if (target.currentHp > 0) {
+          target.currentHp = target.effectiveMaxHp;
+          engine.statusManager.applyStatus(attacker, target, "burn", {
+            duration: 2,
+            bypassImmunity: true,
+          });
+          engine.grantExtraTurn(target);
+          engine.log(
+            `[${attacker.name}] Flame Consume You fully heals ${target.name} and grants an Instant Turn!`,
+            "heal"
+          );
+        }
+      } else {
+        if (target.currentHp <= 0) {
+          target.blockRevive = true;
+          engine.getLivingEnemiesOf(attacker).forEach((e) => {
+            if (engine.statusManager.hasStatus(e, "burn")) {
+              engine.triggerBurnTick(e);
+            }
+          });
+          engine.log(
+            `[${attacker.name}] Flame Consume You inflicts [Block Revive] on ${target.name} and detonates all [Burn] debuffs!`,
+            "crit"
+          );
+        } else {
+          const isBurning = engine.statusManager.hasStatus(target, "burn");
+          const rawDmg = Math.max(1, Math.round(attacker.effectiveMaxHp * 0.25));
+          if (isBurning) {
+            engine.applyCalculatedDamage(target, rawDmg, {
+              attacker,
+              bypassShieldsAndBlocks: true,
+              sourceLabel: "Flame Consume You (100% Ignore DEF/Shields)",
+            });
+          } else {
+            engine.getLivingEnemiesOf(attacker).forEach((e) => {
+              engine.applyCalculatedDamage(e, rawDmg, {
+                attacker,
+                sourceLabel: "Flame Consume You (AoE)",
+              });
+            });
+          }
+        }
+      }
+    },
+  },
+
+  // ==========================================================
+  // 16. THE CALAMITUS MOVES
+  // ==========================================================
+  {
+    id: "death_sickles_move",
+    name: "Death Sickles",
+    element: "Fighting",
+    category: "Melee",
+    stab: false,
+    hits: 2,
+    energyCost: 15,
+    accuracy: 80,
+    isBasicMove: true,
+    bypassUnkillable: true,
+    targetType: "single_enemy",
+    formulaText: "1 x ATK x 2 (Ignores [Unkillable])",
+    description: "Attacks one enemy 2 times. Will ignore [Unkillable] buffs.",
+    computeRawHit({ stats }) {
+      return 1.0 * stats.atk;
+    },
+  },
+  {
+    id: "horde_of_calamity",
+    name: "Horde of Calamity",
+    element: "Fighting",
+    category: "Melee",
+    stab: true,
+    hits: 4,
+    energyCost: 25,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "0.5 x ATK x 4 (Hit 1: Transfer Debuffs, Hit 2: -60% DEF, Hit 3: Spread Debuffs, Hit 4: 2x DMG if Debuffed)",
+    description:
+      "Attacks one enemy 4 times. Hit 1 transfers all debuffs from Calamitus to target. Hit 2 places 60% [Decrease DEF] (2T). Hit 3 spreads target's debuffs to the lowest HP enemy. Hit 4 deals double damage if target has any debuffs.",
+    computeRawHit({ stats, target, hitIndex, engine }) {
+      const base = 0.5 * stats.atk;
+      if (hitIndex === 3 && engine.statusManager.countCategory(target, "debuff") > 0) {
+        return base * 2.0;
+      }
+      return base;
+    },
+    onEachHit({ attacker, target, hitIndex, engine }) {
+      if (target.currentHp <= 0) return;
+      if (hitIndex === 0) {
+        const myDebuffs = attacker.statuses.filter((s) => s.category === "debuff");
+        if (myDebuffs.length > 0) {
+          attacker.statuses = attacker.statuses.filter((s) => s.category !== "debuff");
+          myDebuffs.forEach((d) => {
+            engine.statusManager.applyStatus(attacker, target, d.id, {
+              duration: d.duration || 2,
+              stacks: d.stacks || 1,
+              silent: true,
+            });
+          });
+        }
+      } else if (hitIndex === 1) {
+        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
+      } else if (hitIndex === 2) {
+        const enemies = engine.getLivingEnemiesOf(attacker);
+        const lowest = [...enemies].sort((a, b) => a.currentHp - b.currentHp)[0];
+        if (lowest && lowest.id !== target.id) {
+          target.statuses
+            .filter((s) => s.category === "debuff")
+            .forEach((d) => {
+              engine.statusManager.applyStatus(attacker, lowest, d.id, {
+                duration: d.duration || 2,
+                stacks: d.stacks || 1,
+                silent: true,
+              });
+            });
+        }
+      }
+    },
+  },
+  {
+    id: "necroclysm",
+    name: "Necroclysm",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 40,
+    accuracy: 80,
+    alwaysCrit: true,
+    bypassShields: true,
+    targetType: "all_enemies",
+    formulaText: "1 x ATK (AoE, Guaranteed Crit, Ignores [Shield] & [Block Damage])",
+    description:
+      "Attacks all enemies. Guaranteed to be critical. Will ignore [Shield] and [Block Damage] buffs.",
+    computeRawHit({ stats }) {
+      return 1.0 * stats.atk;
+    },
+  },
+  {
+    id: "calamitus_termination",
+    name: "Termination",
+    element: "Fighting",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 80,
+    accuracy: 100,
+    alwaysCrit: true,
+    targetType: "all_enemies",
+    formulaText: "(1 + (1 - HP/MAX HP)) x ATK (AoE, Guaranteed Crit, Ignores 50% DEF)",
+    description:
+      "Attacks all enemies. Ignores 50% DEF. Damage increases as Calamitus's HP decreases. Guaranteed to be critical.",
+    getIgnoreDefPct() {
+      return 0.5;
+    },
+    computeRawHit({ attacker, stats }) {
+      const missingRatio = Math.max(0, 1 - attacker.currentHp / attacker.effectiveMaxHp);
+      return (1 + missingRatio) * stats.atk;
+    },
+  },
 ];
 
 export function registerAllSkills() {

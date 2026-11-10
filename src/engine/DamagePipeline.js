@@ -45,6 +45,17 @@ export class DamagePipeline {
           stats.spd = Math.floor(stats.spd * item.statBonuses.spdMultiplier);
         }
       }
+      if (item && typeof item.modifyStats === "function") {
+        item.modifyStats({ unit, stats, engine: this.engine });
+      }
+    }
+
+    // Dynamic item counters (Rocket Boots, Remnant)
+    if (unit.customCounters?.rocketBootsSpdBonus) {
+      stats.spd += unit.customCounters.rocketBootsSpdBonus;
+    }
+    if (unit.customCounters?.remnantAtkBonusPct) {
+      stats.atk *= 1 + unit.customCounters.remnantAtkBonusPct;
     }
 
     // 2. Status modifiers (Buffs & Debuffs)
@@ -80,7 +91,14 @@ export class DamagePipeline {
     return stats;
   }
 
-  computeHitDamage({ attacker, target, skill, ignoreDefPct = 0, hitIndex = 0 }) {
+  computeHitDamage({
+    attacker,
+    target,
+    skill,
+    ignoreDefPct = 0,
+    hitIndex = 0,
+    isFreeCounter = false,
+  }) {
     const atkStats = this.getEffectiveStats(attacker);
     const tgtStats = this.getEffectiveStats(target);
 
@@ -102,6 +120,25 @@ export class DamagePipeline {
       rawDamage = Math.min(rawDamage, target.effectiveMaxHp * 0.1);
     }
 
+    // Human Species: +10% damage on basic moves
+    const passivesBlocked = this.engine.statusManager.hasFlag(attacker, "blockPassives");
+    if (!passivesBlocked && attacker.speciesId) {
+      const atkSpecies = Registry.getSpecies(attacker.speciesId);
+      const isBasicSlotMove =
+        skill.isBasicMove || (attacker.activeMoveIds && attacker.activeMoveIds[0] === skill.id);
+      if (atkSpecies && atkSpecies.basicMoveDamageMultiplier && isBasicSlotMove) {
+        rawDamage *= atkSpecies.basicMoveDamageMultiplier;
+      }
+    }
+
+    // Counterattack bonus (Arix's Cursed Holder: +25% counterattack damage)
+    if (isFreeCounter) {
+      const mult = this.engine.getAbilityFlagValue(attacker, "counterattackDmgMultiplier");
+      if (mult) {
+        rawDamage *= mult;
+      }
+    }
+
     // 2. STAB (Same-Type Attack Bonus)
     const hasStab =
       skill.stab === true ||
@@ -110,14 +147,34 @@ export class DamagePipeline {
       rawDamage *= 1.25;
     }
 
-    // 3. Critical Hit Roll
-    const isCrit = this.engine.rng() * 100 < atkStats.critRate;
+    // 3. Critical Hit Roll (Supports guaranteed crit skills and Wrongly Created 2.0x crit)
+    const isCrit =
+      Boolean(skill.alwaysCrit) || this.engine.rng() * 100 < atkStats.critRate;
     if (isCrit) {
-      rawDamage *= 1 + atkStats.critDmg / 100;
+      const fixedCritMult = this.engine.getAbilityFlagValue(attacker, "fixedCritMultiplier");
+      if (fixedCritMult) {
+        rawDamage *= fixedCritMult;
+      } else {
+        rawDamage *= 1 + atkStats.critDmg / 100;
+      }
     }
 
     // 4. Defense Mitigation (Supports positive DEF reduction and negative DEF amplification)
     let clampedIgnoreDef = Math.max(0, Math.min(1, ignoreDefPct));
+
+    // Item Ignore DEF bonus (e.g. Death Sickle, Hallowed Hilt, Fractured Prism)
+    const atkItem = this.engine.getActiveItem(attacker);
+    if (atkItem && typeof atkItem.getExtraIgnoreDefPct === "function") {
+      const extraIgnore = atkItem.getExtraIgnoreDefPct({
+        attacker,
+        target,
+        skill,
+        engine: this.engine,
+      });
+      if (extraIgnore > 0) {
+        clampedIgnoreDef = Math.min(1, clampedIgnoreDef + extraIgnore);
+      }
+    }
 
     // Check Dragonblood Fury passive bonus
     if (
@@ -145,25 +202,46 @@ export class DamagePipeline {
       finalDamage = rawDamage * (1 + ampPct);
     }
 
-    // 5. Outgoing damage ability modifiers (e.g. Novok's Gravewalker +10% per living ally)
+    // 5. Outgoing damage ability & item modifiers (e.g. Novok's Gravewalker, Tethren's Auric Soul, Bayonet)
     for (const ab of this.engine.getActiveAbilities(attacker)) {
       if (typeof ab.modifyOutgoingDamage === "function") {
         finalDamage = ab.modifyOutgoingDamage({
           attacker,
           defender: target,
+          skill,
           damage: finalDamage,
           engine: this.engine,
         });
       }
     }
+    if (atkItem && typeof atkItem.modifyOutgoingDamage === "function") {
+      finalDamage = atkItem.modifyOutgoingDamage({
+        attacker,
+        defender: target,
+        skill,
+        damage: finalDamage,
+        engine: this.engine,
+      });
+    }
 
-    // 6. Buff / Passive / Species damage reduction (Skipped if skill has bypassMitigation: true)
+    // Team Aura: Tethren Dragonsoul's Auric Soul (+10% damage to burning enemies)
+    const attackerTeamHasAuricSoul = this.engine
+      .getLivingAlliesOf(attacker)
+      .some((ally) => this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura"));
+    if (
+      attackerTeamHasAuricSoul &&
+      this.engine.statusManager.hasStatus(target, "burn")
+    ) {
+      finalDamage *= 1.1;
+    }
+
+    // 6. Buff / Passive / Species / Item damage reduction (Skipped if skill has bypassMitigation: true)
     if (!skill.bypassMitigation) {
-      const passivesBlocked = this.engine.statusManager.hasFlag(
+      const tgtPassivesBlocked = this.engine.statusManager.hasFlag(
         target,
         "blockPassives"
       );
-      if (!passivesBlocked && target.speciesId) {
+      if (!tgtPassivesBlocked && target.speciesId) {
         const sp = Registry.getSpecies(target.speciesId);
         if (
           sp &&
@@ -175,7 +253,7 @@ export class DamagePipeline {
         }
       }
 
-      // Status-based damage modifiers (War Armor, Forever Waiting, Deathbrand, Vulnerability)
+      // Status-based damage modifiers (War Armor, Forever Waiting, Deathbrand, Vulnerability, Brittle, Decay)
       for (const st of target.statuses) {
         const def = Registry.getStatus(st.id);
         if (!def || !def.statModifiers) continue;
@@ -194,19 +272,44 @@ export class DamagePipeline {
         }
       }
 
-      // Team aura / Defender passives (e.g. Seraphina's Astral Ward, Novok's Gravewalker)
+      // Team Aura: Tethren Dragonsoul's Auric Soul (-10% damage taken from burning attackers)
+      const defenderTeamHasAuricSoul = this.engine
+        .getLivingAlliesOf(target)
+        .some((ally) => this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura"));
+      if (
+        defenderTeamHasAuricSoul &&
+        this.engine.statusManager.hasStatus(attacker, "burn")
+      ) {
+        finalDamage *= 0.9;
+      }
+
+      // Team aura / Defender passives (e.g. Seraphina's Astral Ward, Novok's Gravewalker, ByuN's Micro Jackson)
       const targetAllies = this.engine.getLivingAlliesOf(target);
       for (const ally of targetAllies) {
         for (const ab of this.engine.getActiveAbilities(ally)) {
           if (typeof ab.modifyIncomingDamage === "function") {
             finalDamage = ab.modifyIncomingDamage({
+              unit: ally,
               attacker,
               defender: target,
+              skill,
               damage: finalDamage,
               engine: this.engine,
             });
           }
         }
+      }
+
+      // Defender Item incoming damage modifier (Chitin Plating, Gilded Diamond, Mask of Rage, Frozen Quartz)
+      const defItem = this.engine.getActiveItem(target);
+      if (defItem && typeof defItem.modifyIncomingDamage === "function") {
+        finalDamage = defItem.modifyIncomingDamage({
+          attacker,
+          defender: target,
+          skill,
+          damage: finalDamage,
+          engine: this.engine,
+        });
       }
     }
 

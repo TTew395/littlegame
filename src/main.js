@@ -173,7 +173,9 @@ class GameApp {
         const itemOptions = allItems
           .map(
             (it) =>
-              `<option value="${it.id}" ${it.id === slot.itemId ? "selected" : ""}>Item: ${it.name}</option>`
+              `<option value="${it.id}" ${it.id === slot.itemId ? "selected" : ""}>${
+                it.tier ? `[${it.tier}] ` : ""
+              }${it.name}</option>`
           )
           .join("");
 
@@ -199,7 +201,7 @@ class GameApp {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.removeIdx);
         this.selectedTeam.splice(idx, 1);
-        this.renderSelectedTeamSlots();
+        this.renderHub();
       });
     });
 
@@ -213,11 +215,55 @@ class GameApp {
     });
   }
 
+  canAddCharacterToTeam(charDef) {
+    if (!charDef) return { allowed: false, reason: "Invalid character" };
+    if (this.selectedTeam.length >= 6) {
+      return { allowed: false, reason: "Team Full (6/6)" };
+    }
+    if (this.selectedTeam.some((slot) => slot.characterId === charDef.id)) {
+      return { allowed: false, reason: "Already in Team" };
+    }
+    const teamHasBoss = this.selectedTeam.some(
+      (slot) => Registry.getCharacter(slot.characterId)?.isBoss
+    );
+    const teamHasRegular = this.selectedTeam.some(
+      (slot) => !Registry.getCharacter(slot.characterId)?.isBoss
+    );
+    if (charDef.isBoss && teamHasRegular) {
+      return { allowed: false, reason: "Cannot Mix Bosses & Champions" };
+    }
+    if (!charDef.isBoss && teamHasBoss) {
+      return { allowed: false, reason: "Cannot Mix Bosses & Champions" };
+    }
+    return { allowed: true, reason: "+ Add to Team" };
+  }
+
+  validateTeamRules(team) {
+    if (!team || team.length === 0) {
+      return { valid: false, error: "Please add at least 1 character to your team before launching a battle." };
+    }
+    const seen = new Set();
+    let hasBoss = false;
+    let hasRegular = false;
+    for (const slot of team) {
+      if (seen.has(slot.characterId)) {
+        return { valid: false, error: "Duplicate characters are not allowed on the same team." };
+      }
+      seen.add(slot.characterId);
+      const def = Registry.getCharacter(slot.characterId);
+      if (def?.isBoss) hasBoss = true;
+      else hasRegular = true;
+    }
+    if (hasBoss && hasRegular) {
+      return { valid: false, error: "Players cannot mix bosses with regular champions in teams." };
+    }
+    return { valid: true };
+  }
+
   renderCharacterPool() {
     const container = document.getElementById("character-pool-grid");
     if (!container) return;
 
-    // Allow players to draft any non-minion Hero (or even Bosses!) into their team
     const playableChars = Registry.getAllCharacters().filter((c) => !c.isMinion);
 
     container.innerHTML = playableChars
@@ -226,7 +272,7 @@ class GameApp {
           .map((id) => Registry.getAbility(id)?.name)
           .filter(Boolean)
           .join(", ");
-        const isFull = this.selectedTeam.length >= 6;
+        const check = this.canAddCharacterToTeam(c);
 
         return `
           <div class="pool-char-card ${c.isBoss ? "pool-boss" : ""}">
@@ -241,8 +287,8 @@ class GameApp {
               HP ${c.stats.hp} | EN ${c.stats.energy} | ATK ${c.stats.atk} | DEF ${c.stats.def}% | SPD ${c.stats.spd}
             </div>
             <div class="pool-abilities">Passive: ${abilities || "None"}</div>
-            <button type="button" class="action-btn add-char-btn" data-char-id="${c.id}" ${isFull ? "disabled" : ""}>
-              ${isFull ? "Team Full (6/6)" : "+ Add to Team"}
+            <button type="button" class="action-btn add-char-btn" data-char-id="${c.id}" ${!check.allowed ? "disabled" : ""}>
+              ${check.reason}
             </button>
           </div>
         `;
@@ -251,9 +297,10 @@ class GameApp {
 
     container.querySelectorAll(".add-char-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (this.selectedTeam.length >= 6) return;
         const charId = btn.dataset.charId;
         const def = Registry.getCharacter(charId);
+        const check = this.canAddCharacterToTeam(def);
+        if (!check.allowed) return;
         this.selectedTeam.push({
           characterId: charId,
           itemId: def?.defaultItemId || "none",
@@ -293,8 +340,9 @@ class GameApp {
   }
 
   launchBossRaidFromHub() {
-    if (this.selectedTeam.length === 0) {
-      alert("Please add at least 1 character to your team before launching a battle.");
+    const check = this.validateTeamRules(this.selectedTeam);
+    if (!check.valid) {
+      alert(check.error);
       return;
     }
     const enc =
@@ -309,17 +357,18 @@ class GameApp {
   }
 
   launchPvpMatchFromHub() {
-    if (this.selectedTeam.length === 0) {
-      alert("Please add at least 1 character to your team before launching a battle.");
+    const check = this.validateTeamRules(this.selectedTeam);
+    if (!check.valid) {
+      alert(check.error);
       return;
     }
     // Opponent squad for PvP match
     const defaultOpponentSquad = [
       { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
-      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-      { characterId: "ignis_drake", itemId: "vampiric_chalice" },
-      { characterId: "seraphina_dawn", itemId: "aegis_core" },
-      { characterId: "vexor_nightblade", itemId: "anarch_sigil" },
+      { characterId: "byun", itemId: "kawabunga_coffee" },
+      { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
+      { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
+      { characterId: "the_calamitus", itemId: "death_sickle" },
     ].slice(0, Math.max(1, this.selectedTeam.length));
 
     this.startEncounter({
@@ -631,13 +680,16 @@ class GameApp {
         const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
 
         this.inspectedUnitId = uid;
-        if (
-          clickedUnit &&
-          activeUnit &&
-          clickedUnit.teamId !== activeUnit.teamId &&
-          clickedUnit.currentHp > 0
-        ) {
-          this.selectedTargetId = uid;
+        if (clickedUnit && activeUnit) {
+          const hasAnyUnitMove = (activeUnit.activeMoveIds || []).some(
+            (mId) => Registry.getSkill(mId)?.targetType === "any_unit"
+          );
+          if (
+            hasAnyUnitMove ||
+            (clickedUnit.teamId !== activeUnit.teamId && clickedUnit.currentHp > 0)
+          ) {
+            this.selectedTargetId = uid;
+          }
         }
         this.renderAll();
       });
@@ -677,6 +729,16 @@ class GameApp {
     if (unit.templateId === "antikhonor_broken_god") {
       badges.push(
         `<span class="mechanic-badge">Skills Used: ${unit.skillsUsedCount || 0}/3</span>`
+      );
+    }
+    if (unit.templateId === "predator") {
+      const evadePct = Math.round(this.engine.getUnitEvasionChance(unit) * 100);
+      badges.push(`<span class="mechanic-badge">Evasion: ${evadePct}%</span>`);
+    }
+    if (unit.templateId === "debt_bearer_alnith") {
+      const totalDue = this.engine.getTotalEnemyBloodDue(unit);
+      badges.push(
+        `<span class="mechanic-badge">Enemy Blood Due: ${totalDue}/15</span>`
       );
     }
     if (unit.forcedNextSkillId) {
