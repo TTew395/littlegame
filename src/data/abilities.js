@@ -1,4 +1,3 @@
-name=abilities.js
 /**
  * Passive Abilities Registry (Emoji-free)
  * Includes all Champions & Raid Bosses:

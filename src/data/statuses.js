@@ -1,4 +1,3 @@
-name=statuses.js
 /**
  * Status Effect Definitions (Buffs, Debuffs, Stacking, Non-Stacking, Turn-based & Event-based)
  * Emoji-free tactical abbreviations. Includes expanded debuff and buff registries.
