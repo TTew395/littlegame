@@ -438,15 +438,21 @@ class GameApp {
       return;
     }
 
-    const executed = this.engine.executeAction(action);
-    if (executed) {
+    try {
+      const executed = this.engine.executeAction(action);
+      if (executed) {
+        this.ensureValidSelection({ syncInspectorToActive: true });
+        this.renderAll();
+
+        if (this.network.role === "host") {
+          this.network.broadcastBattleState(this.engine.serializeState());
+        }
+        this.checkIfAiShouldAct();
+      }
+    } catch (err) {
+      console.error("Error executing battle action:", err);
       this.ensureValidSelection({ syncInspectorToActive: true });
       this.renderAll();
-
-      if (this.network.role === "host") {
-        this.network.broadcastBattleState(this.engine.serializeState());
-      }
-      this.checkIfAiShouldAct();
     }
   }
 
@@ -865,17 +871,20 @@ class GameApp {
     const actorHeaderEl = document.getElementById("active-actor-banner");
     if (!deckEl || !actorHeaderEl) return;
 
+    // Always clear previous turn's command buttons first so a stale move deck can never remain
+    deckEl.innerHTML = "";
+
     if (this.engine.winnerTeam) {
       actorHeaderEl.innerHTML = `<div class="winner-banner">Battle Finished — ${
         this.engine.winnerTeam === 1 ? "Strike Force Triumphs" : "Opposing Force Triumphs"
       }</div>`;
-      deckEl.innerHTML = "";
       return;
     }
 
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
     if (!activeUnit) return;
 
+    const moves = this.engine.getAvailableMovesForUnit(activeUnit);
     const targetUnit = this.engine.getUnitById(this.selectedTargetId);
     const canControl = this.canLocalUserControlUnit(activeUnit);
     const formName = activeUnit.forms?.[activeUnit.form]?.name || activeUnit.form;
@@ -900,8 +909,6 @@ class GameApp {
       </div>
     `;
 
-    const moves = this.engine.getAvailableMovesForUnit(activeUnit);
-    deckEl.innerHTML = "";
     deckEl.dataset.activeActorId = activeUnit.id;
     deckEl.innerHTML = moves
       .map((m) => {

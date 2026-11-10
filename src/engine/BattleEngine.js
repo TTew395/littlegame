@@ -27,6 +27,8 @@ export class BattleEngine {
     this.seed = seed;
     this.rng = createSeededRng(seed);
     this.turnNumber = 0;
+    this.roundNumber = 1;
+    this.actedInCurrentRound = [];
     this.units = [];
     this.activeUnitId = null;
     this.extraTurnQueue = [];
@@ -368,6 +370,16 @@ export class BattleEngine {
     if (deltaFraction < 0 && !bypassImmunity) {
       if (this.hasAbilityFlag(unit, "immuneToTurnMeterReduction")) {
         this.log(`${unit.name} is immune to Turn Meter reduction.`, "info");
+        if (this.hasAbilityFlag(unit, "counterOnSpdDownAttempt")) {
+          const activeActor = this.getUnitById(this.activeUnitId);
+          if (activeActor && activeActor.teamId !== unit.teamId && activeActor.currentHp > 0) {
+            this.log(
+              `[${unit.name}] Steadfast Knight triggers against Turn Meter reduction attempt and counterattacks with [Auric Lance]!`,
+              "special"
+            );
+            this.executeCounterSkill(unit, "auric_lance", activeActor.id);
+          }
+        }
         return;
       }
       const mult = this.getAbilityFlagValue(unit, "turnMeterReductionMultiplier");
@@ -415,8 +427,11 @@ export class BattleEngine {
     if (unit.currentHp <= 0) return;
 
     // Tethren Dragonsoul's Auric Soul: All allies heal 5% MAX HP from [Burn] instead of taking damage
-    const teamHasAuricSoul = this.getLivingAlliesOf(unit).some((ally) =>
-      this.hasAbilityFlag(ally, "auricSoulTeamBurnAura")
+    const teamHasAuricSoul = this.units.some(
+      (ally) =>
+        ally.teamId === unit.teamId &&
+        (this.hasAbilityFlag(ally, "auricSoulTeamBurnAura") ||
+          (ally.abilityIds || []).includes("auric_soul"))
     );
     if (teamHasAuricSoul) {
       const healAmt = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.05));
@@ -444,6 +459,7 @@ export class BattleEngine {
     amount,
     {
       attacker = null,
+      skill = null,
       bypassShieldsAndBlocks = false,
       bypassShields = false,
       bypassUnkillable = false,
@@ -451,7 +467,7 @@ export class BattleEngine {
       silentShields = false,
     } = {}
   ) {
-    if (target.currentHp <= 0 || amount <= 0) return 0;
+    if (target.currentHp <= 0 || amount <= 0 || target._justRevivedProtectThisSkill) return 0;
 
     if (!bypassShieldsAndBlocks && this.statusManager.hasFlag(target, "blockDamage")) {
       if (!silentShields) {
@@ -535,7 +551,10 @@ export class BattleEngine {
     if (target.currentHp > 0 && actual > 0 && tgtItem && typeof tgtItem.onAfterTakeDamage === "function") {
       tgtItem.onAfterTakeDamage({
         unit: target,
+        defender: target,
+        holder: target,
         attacker,
+        skill,
         damageTaken: actual,
         engine: this,
       });
@@ -715,7 +734,12 @@ export class BattleEngine {
       }
       const killerItem = this.getActiveItem(killer);
       if (killerItem && typeof killerItem.onKill === "function") {
-        killerItem.onKill({ unit: killer, victim: target, engine: this });
+        killerItem.onKill({
+          unit: killer,
+          attacker: killer,
+          victim: target,
+          engine: this,
+        });
       }
     }
 
@@ -730,7 +754,13 @@ export class BattleEngine {
       }
       const allyItem = this.getActiveItem(ally);
       if (allyItem && typeof allyItem.onAllyDied === "function") {
-        allyItem.onAllyDied({ unit: ally, deadAlly: target, killer, engine: this });
+        allyItem.onAllyDied({
+          unit: ally,
+          holder: ally,
+          deadAlly: target,
+          killer,
+          engine: this,
+        });
       }
     }
 
@@ -751,6 +781,10 @@ export class BattleEngine {
       );
       if (deadSolanar) {
         deadSolanar.customCounters.scholarOfSunRevived = true;
+        deadSolanar._justRevivedProtectThisSkill = true;
+        deadSolanar.statuses = deadSolanar.statuses.filter(
+          (s) => !["stun", "sleep", "freeze"].includes(s.id)
+        );
         deadSolanar.currentHp = Math.max(
           1,
           Math.floor(deadSolanar.effectiveMaxHp * 0.75)
@@ -872,10 +906,16 @@ export class BattleEngine {
         }
 
         if (usable && typeof skill.canUse === "function") {
-          const check = skill.canUse({ attacker: unit, engine: this });
-          if (!check.allowed) {
+          try {
+            const check = skill.canUse({ attacker: unit, unit, engine: this });
+            if (check && !check.allowed) {
+              usable = false;
+              lockReason = check.reason;
+            }
+          } catch (err) {
+            console.error(`Error in skill.canUse for ${moveId}:`, err);
             usable = false;
-            lockReason = check.reason;
+            lockReason = "Skill requirement not met";
           }
         }
 
@@ -955,10 +995,34 @@ export class BattleEngine {
     });
   }
 
+  checkAndAdvanceRound() {
+    const combatants = this.units.filter(
+      (u) => u.currentHp > 0 && !u.isActionlessTotem
+    );
+    if (combatants.length === 0) return;
+    const allActed = combatants.every((u) =>
+      this.actedInCurrentRound.includes(u.id)
+    );
+    if (allActed) {
+      this.roundNumber += 1;
+      this.actedInCurrentRound = [];
+      for (const u of combatants) {
+        for (const ab of this.getActiveAbilities(u)) {
+          if (typeof ab.onRoundStart === "function") {
+            ab.onRoundStart({ unit: u, roundNumber: this.roundNumber, engine: this });
+          }
+        }
+      }
+    }
+  }
+
   beginUnitTurn(unit, { isExtraTurn = false } = {}) {
     this.turnNumber += 1;
     this.cleanupDefeatedBossSummons();
     this.activeUnitId = unit.id;
+    if (!isExtraTurn && !this.actedInCurrentRound.includes(unit.id)) {
+      this.actedInCurrentRound.push(unit.id);
+    }
 
     if (unit.stance === "rest") {
       this.log(`${unit.name} recovers from Rest (full Defense restored).`, "info");
@@ -1023,6 +1087,7 @@ export class BattleEngine {
     if (shouldSkip) {
       this.log(`${unit.name} is incapacitated and skips their turn.`, "status");
       this.statusManager.tickStatuses(unit, "TURN_END");
+      this.checkAndAdvanceRound();
       this.advanceToNextTurn();
     }
   }
@@ -1044,6 +1109,7 @@ export class BattleEngine {
     });
     this.applyCalculatedDamage(target, damage, {
       attacker,
+      skill: tempSkill,
       sourceLabel: `${label}${isCrit ? " (CRIT)" : ""}`,
     });
   }
@@ -1052,6 +1118,10 @@ export class BattleEngine {
     if (attacker.currentHp <= 0 || this.winnerTeam) return;
     const skill = Registry.getSkill(skillId);
     if (!skill) return;
+    if (!attacker.customCounters.predatorMovesUsed) {
+      attacker.customCounters.predatorMovesUsed = {};
+    }
+    attacker.customCounters.predatorMovesUsed[skillId] = true;
     this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: true });
     this.syncUnitActiveMoves(attacker);
   }
@@ -1067,9 +1137,17 @@ export class BattleEngine {
       }
       evasion += Math.min(0.6, unit.customCounters?.killEvasionBonus || 0);
     }
+    if (unit.customCounters?.evasionBonus) {
+      evasion += unit.customCounters.evasionBonus / 100;
+    }
     const item = this.getActiveItem(unit);
-    if (item && item.evasionBonus) {
-      evasion += item.evasionBonus;
+    if (item) {
+      if (item.evasionBonus) {
+        evasion += item.evasionBonus > 1 ? item.evasionBonus / 100 : item.evasionBonus;
+      }
+      if (item.id === "gravity_coil" && !unit.customCounters?.airborne) {
+        evasion += 0.1;
+      }
     }
     return Math.min(0.85, evasion);
   }
@@ -1202,6 +1280,7 @@ export class BattleEngine {
 
     this.checkWinCondition();
     if (!this.winnerTeam) {
+      this.checkAndAdvanceRound();
       this.advanceToNextTurn();
     } else {
       this.activeUnitId = null;
@@ -1240,11 +1319,52 @@ export class BattleEngine {
     }
 
     if (typeof skill.execute === "function" && !skill.computeRawHit) {
-      this._inSkillExecuteLogScope = true;
-      try {
-        skill.execute({ attacker, targets, engine: this });
-      } finally {
-        this._inSkillExecuteLogScope = false;
+      // Allow enemy-targeted status skills to be evaded by Yautja Cloak / Evasion
+      if (
+        !skill.undodgeable &&
+        (skill.targetType === "single_enemy" || skill.targetType === "all_enemies")
+      ) {
+        const survivingTargets = [];
+        for (const target of targets) {
+          if (target.teamId !== attacker.teamId && target.currentHp > 0) {
+            const evadeChance = this.getUnitEvasionChance(target);
+            if (evadeChance > 0 && this.rng() < evadeChance) {
+              this.log(
+                `${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
+                "special",
+                { isSkill: true }
+              );
+              if (
+                !isFreeCounter &&
+                this.hasAbilityFlag(target, "counterOnEvade") &&
+                attacker.currentHp > 0
+              ) {
+                this.log(
+                  `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`,
+                  "special",
+                  { isSkill: false }
+                );
+                this.executeCounterSkill(target, "wrist_blades", attacker.id);
+              }
+              continue;
+            }
+          }
+          survivingTargets.push(target);
+        }
+        targets = survivingTargets;
+      }
+
+      if (
+        targets.length > 0 ||
+        skill.targetType === "self" ||
+        skill.targetType === "all_allies"
+      ) {
+        this._inSkillExecuteLogScope = true;
+        try {
+          skill.execute({ attacker, targets, engine: this });
+        } finally {
+          this._inSkillExecuteLogScope = false;
+        }
       }
     } else if (skill.computeRawHit) {
       const attackedDefendersThisSkill = new Set();
@@ -1335,6 +1455,7 @@ export class BattleEngine {
 
           const dealt = this.applyCalculatedDamage(target, damage, {
             attacker,
+            skill,
             bypassShieldsAndBlocks,
             bypassShields: Boolean(skill.bypassShields),
             bypassUnkillable: Boolean(skill.bypassUnkillable),
@@ -1497,6 +1618,14 @@ export class BattleEngine {
 
       if (typeof skill.onAfterSkill === "function") {
         skill.onAfterSkill({ attacker, targets, engine: this });
+      }
+    }
+
+    if (!isFreeCounter) {
+      for (const u of this.units) {
+        if (u._justRevivedProtectThisSkill) {
+          delete u._justRevivedProtectThisSkill;
+        }
       }
     }
   }

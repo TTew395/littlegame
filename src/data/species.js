@@ -16,6 +16,7 @@ export const SPECIES_LIST = [
     name: "Human",
     description: "10% more damage on basic moves, no downside.",
     basicMoveDamageBonus: 0.1,
+    basicMoveDamageMultiplier: 1.1,
     damageReductionByType: {},
   },
   {

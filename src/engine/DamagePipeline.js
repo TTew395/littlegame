@@ -162,10 +162,17 @@ export class DamagePipeline {
     // 4. Defense Mitigation (Supports positive DEF reduction and negative DEF amplification)
     let clampedIgnoreDef = Math.max(0, Math.min(1, ignoreDefPct));
 
-    // Item Ignore DEF bonus (e.g. Death Sickle, Hallowed Hilt, Fractured Prism)
+    // Item Ignore DEF bonus (e.g. Crushing Warhammer, Refracting Mirror)
     const atkItem = this.engine.getActiveItem(attacker);
-    if (atkItem && typeof atkItem.getExtraIgnoreDefPct === "function") {
-      const extraIgnore = atkItem.getExtraIgnoreDefPct({
+    const ignoreDefFn =
+      atkItem &&
+      (typeof atkItem.getExtraIgnoreDefPct === "function"
+        ? atkItem.getExtraIgnoreDefPct.bind(atkItem)
+        : typeof atkItem.getBonusIgnoreDef === "function"
+        ? atkItem.getBonusIgnoreDef.bind(atkItem)
+        : null);
+    if (ignoreDefFn) {
+      const extraIgnore = ignoreDefFn({
         attacker,
         target,
         skill,
@@ -225,9 +232,12 @@ export class DamagePipeline {
     }
 
     // Team Aura: Tethren Dragonsoul's Auric Soul (+10% damage to burning enemies)
-    const attackerTeamHasAuricSoul = this.engine
-      .getLivingAlliesOf(attacker)
-      .some((ally) => this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura"));
+    const attackerTeamHasAuricSoul = this.engine.units.some(
+      (ally) =>
+        ally.teamId === attacker.teamId &&
+        (this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura") ||
+          (ally.abilityIds || []).includes("auric_soul"))
+    );
     if (
       attackerTeamHasAuricSoul &&
       this.engine.statusManager.hasStatus(target, "burn")
@@ -273,9 +283,12 @@ export class DamagePipeline {
       }
 
       // Team Aura: Tethren Dragonsoul's Auric Soul (-10% damage taken from burning attackers)
-      const defenderTeamHasAuricSoul = this.engine
-        .getLivingAlliesOf(target)
-        .some((ally) => this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura"));
+      const defenderTeamHasAuricSoul = this.engine.units.some(
+        (ally) =>
+          ally.teamId === target.teamId &&
+          (this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura") ||
+            (ally.abilityIds || []).includes("auric_soul"))
+      );
       if (
         defenderTeamHasAuricSoul &&
         this.engine.statusManager.hasStatus(attacker, "burn")

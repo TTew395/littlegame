@@ -2088,15 +2088,17 @@ export const SKILL_LIST = [
     description:
       "Secret Skill (Unlocked after using Wrist Blades, Smart Disk, and Combstick Throw). Places [Deathbrand] (2T) before attacking. Ignores 50% DEF if target HP < Predator HP, and +50% DEF if target SPD > Predator SPD. Kill grants [Unkillable] (1T); if target survives, casts Smart Disk for 0 Energy.",
     canUse({ attacker }) {
-      const usedSet = attacker.customCounters.predatorMovesUsed || [];
-      const hasAllThree =
-        usedSet.includes("wrist_blades") &&
-        usedSet.includes("smart_disk") &&
-        usedSet.includes("combstick_throw");
-      if (!hasAllThree) {
+      const rawUsed = attacker?.customCounters?.predatorMovesUsed;
+      const hasMove = (id) =>
+        Array.isArray(rawUsed)
+          ? rawUsed.includes(id)
+          : Boolean(rawUsed && rawUsed[id]);
+      const requiredMoves = ["wrist_blades", "smart_disk", "combstick_throw"];
+      const usedCount = requiredMoves.filter(hasMove).length;
+      if (usedCount < 3) {
         return {
           allowed: false,
-          reason: `Secret Skill: Use Wrist Blades, Smart Disk & Combstick Throw first (${usedSet.length}/3)`,
+          reason: `Secret Skill: Use Wrist Blades, Smart Disk & Combstick Throw first (${usedCount}/3)`,
         };
       }
       return { allowed: true };
@@ -2431,11 +2433,17 @@ export const SKILL_LIST = [
     description:
       "Places a guaranteed [Burn] debuff on all allies for 3 turns (which heals them via Auric Soul). Then places a [Burn] debuff on all enemies for 3 turns.",
     execute({ attacker, engine }) {
+      engine.log(
+        `${attacker.name} casts [By Fire Be Healed]: places [Burn] (3T) on all allies and all enemies.`,
+        "heal",
+        { isSkill: true }
+      );
       engine.getLivingAlliesOf(attacker).forEach((ally) => {
         engine.statusManager.applyStatus(attacker, ally, "burn", {
           duration: 3,
           bypassImmunity: true,
         });
+        engine.triggerBurnTick(ally);
       });
       engine.getLivingEnemiesOf(attacker).forEach((enemy) => {
         engine.statusManager.applyStatus(attacker, enemy, "burn", { duration: 3 });

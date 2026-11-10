@@ -336,7 +336,7 @@ export const STATUS_LIST = [
     maxStacks: 1,
     tickTiming: "TURN_END",
     description: "Counterattacks with the character's basic skill when attacked.",
-    flags: { counterattackOnHit: true },
+    flags: { counterattackOnHit: true, counterOnAttacked: true },
   },
   {
     id: "taunt",

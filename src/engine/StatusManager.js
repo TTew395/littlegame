@@ -87,7 +87,7 @@ export class StatusManager {
         }
         // Marius the Gallant's Steadfast Knight: counterattack with Auric Lance when enemy attempts to place [Decrease SPD]
         if (
-          statusId === "spd_down" &&
+          (statusId === "spd_down" || statusId === "windstruck") &&
           source &&
           source.teamId !== target.teamId &&
           this.engine.hasAbilityFlag(target, "counterOnSpdDownAttempt")
@@ -245,7 +245,7 @@ export class StatusManager {
     }
 
     // Solanar the Gleaming's Scholar of the Sun: 20% chance to counterattack with [Solar Nova] when an enemy receives a buff
-    if (def.category === "buff") {
+    if (def.category === "buff" && this.engine.turnNumber > 0) {
       const opposingSolanars = this.engine
         .getLivingEnemiesOf(target)
         .filter((u) => this.engine.hasAbilityFlag(u, "counterOnEnemyExtraTurnOrBuff"));
@@ -308,8 +308,17 @@ export class StatusManager {
   }
 
   cleanseOneDebuff(target) {
+    const teamHasAuricSoul = this.engine.units.some(
+      (ally) =>
+        ally.teamId === target.teamId &&
+        (this.engine.hasAbilityFlag(ally, "auricSoulTeamBurnAura") ||
+          (ally.abilityIds || []).includes("auric_soul"))
+    );
     const idx = target.statuses.findIndex(
-      (s) => s.category === "debuff" && !s.isProtected
+      (s) =>
+        s.category === "debuff" &&
+        !s.isProtected &&
+        !(teamHasAuricSoul && s.id === "burn")
     );
     if (idx !== -1) {
       const removed = target.statuses.splice(idx, 1)[0];
@@ -347,6 +356,20 @@ export class StatusManager {
           }
           const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
           this.engine.dealTrueDamage(unit, dmg, `Hemorrhage x${st.stacks}`);
+        } else if (st.id === "acidic") {
+          let pct = 0.03 * st.stacks;
+          if (this.engine.hasAbilityFlag(unit, "capEnemyMaxHpScalingPct")) {
+            pct = Math.min(pct, 0.1);
+          }
+          const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
+          this.engine.dealTrueDamage(unit, dmg, `Acidic x${st.stacks}`);
+        } else if (st.id === "decay") {
+          let pct = 0.05 * st.stacks;
+          if (this.engine.hasAbilityFlag(unit, "capEnemyMaxHpScalingPct")) {
+            pct = Math.min(pct, 0.1);
+          }
+          const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * pct));
+          this.engine.dealTrueDamage(unit, dmg, `Decay x${st.stacks}`);
         } else if (st.id === "burn") {
           this.engine.triggerBurnTick(unit);
         }

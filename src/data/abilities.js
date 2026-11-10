@@ -409,7 +409,8 @@ export const ABILITY_LIST = [
       const bonusPct = Math.min(0.4, livingAllies * 0.1);
       return damage * (1 + bonusPct);
     },
-    modifyIncomingDamage({ defender, damage, engine }) {
+    modifyIncomingDamage({ unit, defender, damage, engine }) {
+      if (unit && defender && unit.id !== defender.id) return damage;
       const livingAllies = engine
         .getLivingAlliesOf(defender)
         .filter((a) => a.id !== defender.id).length;
@@ -528,6 +529,185 @@ export const ABILITY_LIST = [
     name: "Dragonblood Fury",
     description:
       "Deals 15% more damage against targets with more than 50% HP, or ignores 20% DEF against targets below 50% HP.",
+  },
+
+  // ==========================================
+  // NEW CHAMPION PASSIVE ABILITIES
+  // ==========================================
+  {
+    id: "micro_jackson",
+    name: "Micro Jackson",
+    description:
+      "Receives 15% less damage from AOE attacks. Whenever an ally is attacked, has a 20% chance of reducing incoming damage by 50% (once per attack). Whenever an enemy is attacked, has a 20% chance of joining in with the 2-Barrack Rush skill (does not consume Energy).",
+    flags: {
+      allyAttackJoinChance: true,
+    },
+    modifyIncomingDamage({ unit, defender, skill, damage, engine }) {
+      let result = damage;
+      if (unit && defender && unit.id === defender.id && skill?.targetType === "all_enemies") {
+        result *= 0.85;
+      }
+      if (unit && defender && unit.teamId === defender.teamId) {
+        const guardKey = `${engine.turnNumber}-${defender.id}`;
+        if (unit.customCounters._microGuardKey !== guardKey) {
+          unit.customCounters._microGuardKey = guardKey;
+          if (engine.rng() < 0.2) {
+            result *= 0.5;
+            engine.log(
+              `[${unit.name}] Micro Jackson reduces incoming damage to ${defender.name} by 50%!`,
+              "special"
+            );
+          }
+        }
+      }
+      return result;
+    },
+  },
+  {
+    id: "cursed_holder",
+    name: "Cursed Holder",
+    description:
+      "Deals 25% more damage when counterattacking. Counterattacks do not cost energy.",
+    flags: {
+      counterattackDmgMultiplier: 1.25,
+    },
+  },
+  {
+    id: "steadfast_knight",
+    name: "Steadfast Knight",
+    description:
+      "Immune to [Decrease SPD] and speed/Turn Meter reduction effects. Whenever an enemy attempts to place one of these debuffs or switches Form, instantly counterattacks with the Auric Lance skill.",
+    immunities: ["spd_down", "windstruck"],
+    flags: {
+      immuneToTurnMeterReduction: true,
+      counterOnSpdDownAttempt: true,
+      counterOnEnemyFormSwitch: true,
+    },
+  },
+  {
+    id: "yautja_cloak",
+    name: "Yautja Cloak",
+    description:
+      "At the start of each round, has a 50% chance to evade incoming skills (decreases to 0% upon taking a turn). Each time this character kills an enemy, increases their chance of evasion by 20%, stacking up to 60%. Whenever this character successfully evades an enemy's skill, counterattacks with Wrist Blades.",
+    flags: {
+      yautjaCloakEvasion: true,
+      counterOnEvade: true,
+    },
+    onBattleStart({ unit, engine }) {
+      unit.customCounters.cloakStartEvasionActive = true;
+      unit.customCounters.killEvasionBonus = 0;
+      unit.customCounters.predatorMovesUsed = {};
+      engine.log(
+        `[${unit.name}] Yautja Cloak active: 50% Evasion chance until taking a turn.`,
+        "special"
+      );
+    },
+    onRoundStart({ unit, engine }) {
+      if (unit.currentHp > 0 && !unit.customCounters.cloakStartEvasionActive) {
+        unit.customCounters.cloakStartEvasionActive = true;
+        engine.log(
+          `[${unit.name}] Yautja Cloak re-engages for the new round (50% Evasion until taking a turn).`,
+          "info"
+        );
+      }
+    },
+    onTurnStart({ unit }) {
+      unit.customCounters.cloakStartEvasionActive = false;
+    },
+    onKillEnemy({ unit, victim, engine }) {
+      const prev = unit.customCounters.killEvasionBonus || 0;
+      if (prev < 0.6) {
+        unit.customCounters.killEvasionBonus = Math.min(
+          0.6,
+          Math.round((prev + 0.2) * 100) / 100
+        );
+        engine.log(
+          `[${unit.name}] Yautja Cloak: slaying ${victim.name} permanently increases Evasion by +20% (Kill Bonus: ${Math.round(unit.customCounters.killEvasionBonus * 100)}%).`,
+          "special"
+        );
+      }
+    },
+  },
+  {
+    id: "scholar_of_sun",
+    name: "Scholar of Sun",
+    cannotBeBlocked: true,
+    description:
+      "Once per battle, if this character is dead, when their last living ally dies, instantly revives this character with 75% HP, 75% energy, and grants an Instant Turn. Whenever an enemy gets an Extra Turn, Instant Turn, or receives a buff, has a 20% chance of counterattacking with Solar Nova.",
+    flags: {
+      counterOnEnemyExtraTurnOrBuff: true,
+      scholarOfSunRevive: true,
+    },
+  },
+  {
+    id: "marker_of_debt",
+    name: "Marker of Debt",
+    description:
+      "Whenever this character attacks, has a 50% chance (+5% per Blood-Due stack on enemy team, up to +25%) to place a random 1-turn debuff ([Poison], [Burn], [Hemorrhage], [Acidic], [Windstruck], [Bleed], [Decay]). Whenever a debuff is placed on any enemy, also places 1 stack of [Blood-Due] (unresistable, max 15 on enemy team). Takes 3% less damage per [Blood-Due] on attacker (up to 15%). Heals by 4% of ATK per [Blood-Due] on target when attacking. When killed, deals True Damage equal to 5% MAX HP per [Blood-Due] (up to 25%), cleanses all statuses/Blood-Due from all units, and heals everyone by 25% MAX HP (once per round).",
+    flags: {
+      markerOfDebtOnHit: true,
+      applyBloodDueOnDebuff: true,
+    },
+    modifyIncomingDamage({ unit, attacker, defender, damage, engine }) {
+      if (unit && defender && unit.id !== defender.id) return damage;
+      if (!attacker) return damage;
+      const stacks = engine.statusManager.getStacks(attacker, "blood_due");
+      if (stacks <= 0) return damage;
+      const red = Math.min(0.15, stacks * 0.03);
+      return damage * (1 - red);
+    },
+    onDeath({ unit, engine }) {
+      if (unit.customCounters.markerDeathTriggered) return;
+      unit.customCounters.markerDeathTriggered = true;
+      engine.log(
+        `[${unit.name}] Marker of Debt triggers final reckoning upon death!`,
+        "crit"
+      );
+
+      for (const e of engine.getLivingEnemiesOf(unit)) {
+        const stacks = engine.statusManager.getStacks(e, "blood_due");
+        if (stacks > 0) {
+          const pct = Math.min(0.25, stacks * 0.05);
+          const dmg = Math.max(1, Math.floor(e.effectiveMaxHp * pct));
+          engine.dealTrueDamage(
+            e,
+            dmg,
+            `Marker of Debt Death Reckoning (${stacks} Blood-Due)`
+          );
+        }
+      }
+
+      for (const u of engine.getLivingUnits()) {
+        u.statuses = [];
+        u.shieldHp = 0;
+        const heal = Math.max(1, Math.floor(u.effectiveMaxHp * 0.25));
+        u.currentHp = Math.min(u.effectiveMaxHp, u.currentHp + heal);
+      }
+      engine.log(
+        "Marker of Debt removes all buffs, debuffs, and [Blood-Due] stacks from all units and heals everyone by 25% MAX HP.",
+        "heal"
+      );
+    },
+  },
+  {
+    id: "auric_soul",
+    name: "Auric Soul",
+    cannotBeBlocked: true,
+    description:
+      "Allies take 10% less damage against enemies under [Burn] debuffs and deal 10% more damage against enemies under [Burn] debuffs. [Burn] debuffs placed on allies heal them by 5% MAX HP instead of damaging them.",
+    flags: {
+      auricSoulTeamBurnAura: true,
+    },
+  },
+  {
+    id: "wrongly_created",
+    name: "Wrongly Created",
+    description:
+      "Immune to [Decrease ATK] debuffs. Critical hits from this character deal double damage (2.0x) instead.",
+    immunities: ["atk_down"],
+    flags: {
+      fixedCritMultiplier: 2.0,
+    },
   },
 ];
 
