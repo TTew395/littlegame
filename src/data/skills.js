@@ -1,16 +1,12 @@
 /**
  * Skill / Move Definitions Registry
- * Includes all skills for:
- * - Universal Stances (`wait`, `rest`)
- * - Karnage the Anarch (Base & Alternate Forms)
- * - Antikhonor, Broken God
- * - Ouroboros, The Swarm & Swarm Spawn
- * - Crypt-Keeper Novok & Crypt Acolytes
- * - Ternax Hellfire
- * - First Genius, Zander (Base Form & Evolution State)
- * - Allekheiros, Eternal Guardian (including Enhanced Stars Shall Weep & Charging Counter)
- * - Theridine, Great Septimus (Multi-Bar Godspawn & 7-Bar Im Anfang War die Tat)
- * - Party Heroes (Valkyria, Seraphina, Ignis, Vexor, Orion)
+ *
+ * Declarative Sequencing & Requirement Fields Supported by the Engine:
+ * - `minOtherSkillsUsed`: number (e.g. 3 — requires 3 other non-universal skills used first)
+ * - `requiresPreviousSkill`: string skillId (e.g. "glory_to_all_honorable_dead" — can only be cast after casting that prerequisite skill)
+ * - `forcesNextSkill`: string skillId (e.g. "all_realms_leveled" — forces the unit to use that skill next; if lacking Energy, AI/Player must Wait/Rest until able)
+ * - `upgradesSkill`: { from: "heart_of_thorns", to: "stars_shall_weep" } (declaratively swaps a skill in the unit's active move list)
+ * - `cannotCastManually`: boolean (only castable when queued by an ability/counter or `forcesNextSkill`)
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -29,6 +25,7 @@ export const SKILL_LIST = [
     accuracy: null,
     targetType: "self",
     isUniversal: true,
+    formulaText: "Regain 1/5 Max Energy • Full Defense",
     description:
       "Regain a small amount of energy (1/5 of your total), but keep your guard up (full defense).",
     execute({ attacker, engine }) {
@@ -51,6 +48,7 @@ export const SKILL_LIST = [
     accuracy: null,
     targetType: "self",
     isUniversal: true,
+    formulaText: "Regain 1/3 Max Energy • Halved Defense",
     description:
       "Regain a large amount of energy (1/3 of your total), but let your guard down (halved defense until your next turn).",
     execute({ attacker, engine }) {
@@ -163,10 +161,11 @@ export const SKILL_LIST = [
     cooldown: 4,
     accuracy: null,
     targetType: "self",
+    formulaText: "Transform to Alternate Form • Grants Extra Turn",
     description:
       "Transforms this character into their Alternate Form. Then grants an Extra Turn.",
     execute({ attacker, engine }) {
-      attacker.form = "alternate";
+      engine.transformUnitForm(attacker, "alternate");
       engine.log(
         `🔥 ${attacker.name} unleashes METAMORPH -> Transformed into Alternate Form and granted an Extra Turn!`,
         "special"
@@ -251,10 +250,11 @@ export const SKILL_LIST = [
     cooldown: 4,
     accuracy: null,
     targetType: "self",
+    formulaText: "Transform to Base Form • Grants Extra Turn",
     description:
       "Transforms this character into their Base Form. Then grants an Extra Turn.",
     execute({ attacker, engine }) {
-      attacker.form = "base";
+      engine.transformUnitForm(attacker, "base");
       engine.log(
         `⚡ ${attacker.name} casts METAMORPH -> Returned to Base Form and granted an Extra Turn!`,
         "special"
@@ -312,18 +312,12 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "all_enemies",
+    // Declarative sequence rules:
+    minOtherSkillsUsed: 3,
+    forcesNextSkill: "all_realms_leveled",
     formulaText: "Summons Linked Soul Spears + 12 War Armor + Glory",
     description:
-      "Requires 3 other skills used first. Summons a tied Soul Spear for each enemy (200% MAX HP; takes +100% dmg from tied hero; destroys 1% MAX HP per 2% Spear HP; deals 5% MAX HP to Antikhonor when destroyed). Sets War Armor to 12 and applies 1 Glory stack to all characters. Forces 'All Realms Leveled' next turn.",
-    canUse({ attacker }) {
-      if (attacker.skillsUsedCount < 3) {
-        return {
-          allowed: false,
-          reason: `Requires 3 skills used first (${attacker.skillsUsedCount}/3 used).`,
-        };
-      }
-      return { allowed: true };
-    },
+      "Cannot be used unless 3 other skills have been used first. Summons a tied Soul Spear for each enemy (200% MAX HP; takes +100% dmg from tied hero; destroys 1% MAX HP per 2% Spear HP; deals 5% MAX HP to Antikhonor when destroyed). Sets War Armor to 12 and applies 1 Glory stack to all characters. Forces 'All Realms Leveled, Legions to Dust' next.",
     execute({ attacker, engine }) {
       engine.statusManager.setStatusStacks(attacker, "war_armor", 12, {
         isProtected: true,
@@ -344,7 +338,6 @@ export const SKILL_LIST = [
       });
 
       engine.recalculateSoulSpearDestruction();
-      attacker.forcedNextSkillId = "all_realms_leveled";
 
       engine.log(
         `⚔️ ${attacker.name} invokes GLORY TO ALL HONORABLE DEAD! Summoned ${enemies.length} Soul Spear(s), raised War Armor to 12, and bestowed [Glory]!`,
@@ -364,9 +357,11 @@ export const SKILL_LIST = [
     undodgeable: true,
     bypassMitigation: true,
     targetType: "all_enemies",
+    // Declarative sequence rule: must be preceded by Glory to All Honorable Dead
+    requiresPreviousSkill: "glory_to_all_honorable_dead",
     formulaText: "2 x ATK (+5% per 1% Missing HP, +10% per 1% Destroyed HP, Ignores 100% DEF)",
     description:
-      "Attacks all enemies (Undodgeable). Damage increases by 5% for each 1% HP missing, and by 10% for each 1% HP currently destroyed. Ignores 100% DEF and bypasses enemy buffs/passives.",
+      "Must be used after Glory to All Honorable Dead. Attacks all enemies (Undodgeable). Damage increases by 5% for each 1% HP missing, and by 10% for each 1% HP currently destroyed. Ignores 100% DEF and bypasses enemy buffs/passives.",
     getIgnoreDefPct() {
       return 1.0;
     },
@@ -456,6 +451,8 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "self",
+    // Declarative sequence rule:
+    forcesNextSkill: "fallen_stars_eulogy",
     formulaText: "All Swarm Spawns Instant Turn -> Forces Fallen Star's Eulogy",
     description:
       "Grants all Swarm Spawns an Instant Turn. Ouroboros's next turn will unleash Fallen Star's Eulogy.",
@@ -464,7 +461,6 @@ export const SKILL_LIST = [
         .getLivingAlliesOf(attacker)
         .filter((a) => a.templateId === "swarm_spawn");
       spawns.forEach((sp) => engine.grantExtraTurn(sp));
-      attacker.forcedNextSkillId = "fallen_stars_eulogy";
       engine.log(
         `🪲 [${attacker.name}] casts LARVAL EVOLUTION! ${spawns.length} Swarm Spawn(s) granted an Instant Turn; Fallen Star's Eulogy queued next!`,
         "special"
@@ -482,9 +478,11 @@ export const SKILL_LIST = [
     accuracy: 100,
     undodgeable: true,
     targetType: "all_enemies",
+    // Declarative sequence rule: must be preceded by Larval Evolution
+    requiresPreviousSkill: "larval_evolution",
     formulaText: "1.4 x ATK x 3 (+25% DMG per alive Spawn) + Stun + All Spawns Swarm Ensemble",
     description:
-      "Attacks all enemies 3 times (+25% damage per alive Swarm Spawn). Places [Stun] on all enemies for 1 turn. Then teams up with all Swarm Spawns to use Swarm Ensemble (0 Energy).",
+      "Must be preceded by Larval Evolution. Attacks all enemies 3 times (+25% damage per alive Swarm Spawn). Places [Stun] on all enemies for 1 turn. Then teams up with all Swarm Spawns to use Swarm Ensemble (0 Energy).",
     computeRawHit({ attacker, stats, engine }) {
       const aliveSpawns = engine
         .getLivingAlliesOf(attacker)
@@ -859,8 +857,9 @@ export const SKILL_LIST = [
     accuracy: null,
     targetType: "self",
     cannotCastManually: true,
+    formulaText: "Auto-Triggered at 600 Transmutation",
     description:
-      "First Genius, Zander enters the Evolution state (SPD 150, DEF -50, ATK 20, Termination Counter = 8). Triggered automatically at 600 Transmutation.",
+      "First Genius, Zander enters the Evolution state (SPD 150, DEF -50, ATK 20, Termination Counter = 8). This move cannot be cast manually.",
     execute({ attacker, engine }) {
       engine.enterZanderEvolution(attacker);
     },
@@ -979,7 +978,7 @@ export const SKILL_LIST = [
     targetType: "all_enemies",
     formulaText: "1 x ATK x 4 (Reduced by 0.1% per 1 DMG taken in Evolution) -> Returns to Base Form",
     description:
-      "Attacks all enemies 4 times (Hit 1: scales with missing Energy; Hit 2: scales with target MAX HP; Hit 3: scales with target DEF; Hit 4: True Damage). Reduced by 0.1% per 1 damage taken in Evolution state. Returns Zander to Base Form.",
+      "Auto-triggered when Termination Counter reaches 0. Attacks all enemies 4 times (Hit 1: scales with missing Energy; Hit 2: scales with target MAX HP; Hit 3: scales with target DEF; Hit 4: True Damage). Reduced by 0.1% per 1 damage taken in Evolution state. Returns Zander to Base Form.",
     computeRawHit({ attacker, target, stats, targetStats }) {
       const dmgTaken = attacker.customCounters.evolutionDamageTaken || 0;
       const reductionMult = Math.max(0.05, 1 - dmgTaken * 0.001);
@@ -1026,7 +1025,7 @@ export const SKILL_LIST = [
     targetType: "all_enemies",
     formulaText: "1 x ATK (x3 hits, 80% chance 60% [Decrease DEF] 2T)",
     description:
-      "Attacks all enemies three times. Each hit has an 80% chance of placing a 60% [Decrease DEF] debuff for 2 turns.",
+      "Attacks all enemies three times. Each hit has an 80% chance of placing a 60% [Decrease DEF] debuff for 2 turns. (Enhances into Stars Shall Weep after Flectere si Nequeno).",
     computeRawHit({ stats }) {
       return 1.0 * stats.atk;
     },
@@ -1075,12 +1074,13 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "self",
+    // Declarative sequence rule:
+    forcesNextSkill: "flectere_si_nequeno",
     formulaText: "Enter Charging State (ATK -50%, SPD -75%, Counter w/ Sweep the Field)",
     description:
       "Begins charging Flectere si Nequeno, Superos Acheronta Movebo. While charging, ATK -50% and SPD -75%. Counters attacks with Sweep the Field (each counter reduces next Flectere damage by 5%, up to 50%). Forces Flectere on next turn.",
     execute({ attacker, engine }) {
       attacker.customCounters.chargingCounters = 0;
-      attacker.forcedNextSkillId = "flectere_si_nequeno";
       engine.statusManager.applyStatus(attacker, attacker, "silent_charging", {
         isProtected: true,
       });
@@ -1101,18 +1101,12 @@ export const SKILL_LIST = [
     accuracy: 100,
     undodgeable: true,
     targetType: "all_enemies",
+    // Declarative sequence & upgrade rules:
+    requiresPreviousSkill: "ten_thousand_years_silent",
+    upgradesSkill: { from: "heart_of_thorns", to: "stars_shall_weep" },
     formulaText: "(3 x ATK + 0.7 x DEF) x 2 (Hit 1 Ignores DEF, Hit 2 2x vs Lower DEF)",
     description:
-      "Requires Ten Thousand Years Silent. Attacks all enemies 2 times (Hit 1 ignores DEF; Hit 2 deals double damage to targets with less DEF than Allekheiros). Enhances Heart of Thorns to Stars Shall Weep. Killing a target triggers Stars Shall Weep; failing to kill reduces DEF by 100% and delays action by 50%.",
-    canUse({ attacker, engine }) {
-      if (!engine.statusManager.hasStatus(attacker, "silent_charging")) {
-        return {
-          allowed: false,
-          reason: "Requires casting Ten Thousand Years Silent first.",
-        };
-      }
-      return { allowed: true };
-    },
+      "Cannot be cast without casting Ten Thousand Years Silent first. Attacks all enemies 2 times (Hit 1 ignores DEF; Hit 2 deals double damage to targets with less DEF than Allekheiros). Enhances Heart of Thorns to Stars Shall Weep. Killing a target triggers Stars Shall Weep; failing to kill reduces DEF by 100% and delays action by 50%.",
     onBeforeSkill({ attacker, engine }) {
       attacker.customCounters.flectereKilledAny = false;
       engine.statusManager.removeStatus(attacker, "silent_charging", {
@@ -1137,13 +1131,7 @@ export const SKILL_LIST = [
       attacker.customCounters.flectereKilledAny = true;
     },
     onAfterSkill({ attacker, engine }) {
-      // Enhance Heart of Thorns -> Stars Shall Weep
-      attacker.form = "enhanced";
-      engine.log(
-        `🌟 [${attacker.name}] enhances Heart of Thorns into [Stars Shall Weep]!`,
-        "special"
-      );
-
+      engine.transformUnitForm(attacker, "enhanced");
       if (attacker.customCounters.flectereKilledAny) {
         engine.log(
           `💥 [${attacker.name}] Flectere si Nequeno claimed a life -> Instantly activates [Stars Shall Weep]!`,
@@ -1254,7 +1242,6 @@ export const SKILL_LIST = [
     execute({ attacker, engine }) {
       attacker.customCounters.chargingBarsRemaining = 7;
       attacker.customCounters.chargingReactionsLeft = 7;
-      // Restore 100% of all enemies' energy
       engine.getLivingEnemiesOf(attacker).forEach((enemy) => {
         enemy.currentEnergy = enemy.maxEnergy;
       });
@@ -1278,7 +1265,7 @@ export const SKILL_LIST = [
     targetType: "all_enemies",
     formulaText: "(3 x ATK + 0.1 x ENEMY MAX HP) x 7 (Ignores 100% DEF)",
     description:
-      "Unleashed when Im Anfang War die Tat charging completes! Attacks all enemies 7 times, ignoring 100% DEF.",
+      "Can only be cast once Im Anfang War die Tat charging finishes! Attacks all enemies 7 times, ignoring 100% DEF.",
     getIgnoreDefPct() {
       return 1.0;
     },

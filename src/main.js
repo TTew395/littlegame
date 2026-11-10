@@ -1,13 +1,9 @@
 /**
  * Main Application & UI Controller
- * Supports all 7 Raid Boss Encounters + 1v1 Duel + 3v3 Squad PvP:
- * 1. Antikhonor, Broken God (5 Heroes)
- * 2. Ouroboros, The Swarm (5 Heroes)
- * 3. Crypt-Keeper Novok (5 Heroes)
- * 4. Ternax Hellfire (5 Heroes)
- * 5. First Genius, Zander (6 Heroes Recommended)
- * 6. Allekheiros, Eternal Guardian (5 Heroes)
- * 7. Theridine, Great Septimus (5 Heroes)
+ * Ensures the Command Deck & Inspector Skill Lists ALWAYS refresh and display:
+ * - Current Form's moves (e.g. Karnage Base <-> Alternate, Zander Base <-> Evolution, Allekheiros Base -> Awakened)
+ * - Sequence & Prerequisite Badges (e.g. "Requires 3 skills first", "Requires Glory to All Honorable Dead first", "⚡ QUEUED NEXT")
+ * - Full move list in the Right Sidebar Inspector for any clicked character or boss!
  */
 
 import { initializeGameContent } from "./data/index.js";
@@ -114,7 +110,7 @@ class GameApp {
           this.engine = new BattleEngine({ mode: snapshot.mode, seed: snapshot.seed });
         }
         this.engine.hydrateState(snapshot);
-        this.ensureValidSelection();
+        this.ensureValidSelection({ syncInspectorToActive: true });
         this.renderAll();
       },
       onActionSubmitted: (action) => {
@@ -145,7 +141,7 @@ class GameApp {
       selectEl.value = presetKey;
     }
 
-    this.ensureValidSelection();
+    this.ensureValidSelection({ syncInspectorToActive: true });
     this.renderAll();
 
     if (this.network.role === "host") {
@@ -154,7 +150,7 @@ class GameApp {
     this.checkIfAiShouldAct();
   }
 
-  ensureValidSelection() {
+  ensureValidSelection({ syncInspectorToActive = false } = {}) {
     if (!this.engine) return;
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
     if (activeUnit) {
@@ -167,7 +163,11 @@ class GameApp {
       ) {
         this.selectedTargetId = enemies[0]?.id || null;
       }
-      if (!this.inspectedUnitId || !this.engine.getUnitById(this.inspectedUnitId)) {
+      if (
+        syncInspectorToActive ||
+        !this.inspectedUnitId ||
+        !this.engine.getUnitById(this.inspectedUnitId)
+      ) {
         this.inspectedUnitId = activeUnit.id;
       }
     }
@@ -193,7 +193,7 @@ class GameApp {
 
     const executed = this.engine.executeAction(action);
     if (executed) {
-      this.ensureValidSelection();
+      this.ensureValidSelection({ syncInspectorToActive: true });
       this.renderAll();
 
       if (this.network.role === "host") {
@@ -243,6 +243,7 @@ class GameApp {
         this.autoBossAi = !this.autoBossAi;
         aiToggle.textContent = `🤖 Boss/Enemy AI: ${this.autoBossAi ? "ON" : "MANUAL"}`;
         aiToggle.classList.toggle("active", this.autoBossAi);
+        this.renderAll();
         this.checkIfAiShouldAct();
       });
     }
@@ -409,7 +410,7 @@ class GameApp {
 
     if (unit.templateId === "ouroboros_the_swarm") {
       badges.push(
-        `<span class="mechanic-badge">🧬 Evolution Counter: ${c.evolutionCounter ?? 8}/8</span>`
+        `<span class="mechanic-badge">🧬 Evolution: ${c.evolutionCounter ?? 8}/8</span>`
       );
     }
     if (unit.templateId === "first_genius_zander") {
@@ -435,7 +436,13 @@ class GameApp {
     }
     if (unit.templateId === "antikhonor_broken_god") {
       badges.push(
-        `<span class="mechanic-badge">⚔️ Skills Used: ${unit.skillsUsedCount}</span>`
+        `<span class="mechanic-badge">⚔️ Skills Used: ${unit.skillsUsedCount || 0}/3</span>`
+      );
+    }
+    if (unit.forcedNextSkillId) {
+      const nextSk = Registry.getSkill(unit.forcedNextSkillId);
+      badges.push(
+        `<span class="mechanic-badge danger">⛓️ Next: ${nextSk?.name || unit.forcedNextSkillId}</span>`
       );
     }
     if ((unit.shieldHp || 0) > 0) {
@@ -478,7 +485,7 @@ class GameApp {
         : "";
 
     const formBadge =
-      Object.keys(unit.forms).length > 1
+      Object.keys(unit.forms || {}).length > 1
         ? `<span class="form-tag">${unit.forms[unit.form]?.name || unit.form}</span>`
         : "";
 
@@ -569,13 +576,21 @@ class GameApp {
 
     const targetUnit = this.engine.getUnitById(this.selectedTargetId);
     const canControl = this.canLocalUserControlUnit(activeUnit);
+    const formName = activeUnit.forms?.[activeUnit.form]?.name || activeUnit.form;
+    const lastSkillName = activeUnit.lastNonUniversalSkillId
+      ? Registry.getSkill(activeUnit.lastNonUniversalSkillId)?.name
+      : "None";
 
     actorHeaderEl.innerHTML = `
       <div class="actor-banner-left">
         <span class="actor-big-avatar">${activeUnit.avatar}</span>
         <div>
-          <h3>${activeUnit.name}'s Turn <small>(${activeUnit.forms[activeUnit.form]?.name || "Base"})</small></h3>
-          <p>Selected Target: <strong>${targetUnit ? `${targetUnit.avatar} ${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong></p>
+          <h3>${activeUnit.name}'s Turn <small>(${formName})</small></h3>
+          <p>
+            Target: <strong>${targetUnit ? `${targetUnit.avatar} ${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong>
+            • Skills Used: <strong>${activeUnit.skillsUsedCount || 0}</strong>
+            • Last Skill: <strong>${lastSkillName}</strong>
+          </p>
         </div>
       </div>
       <div class="actor-banner-right">
@@ -588,10 +603,13 @@ class GameApp {
       .map((m) => {
         const disabledAttr = !m.usable || !canControl ? "disabled" : "";
         const universalClass = m.isUniversal ? "universal-move" : "character-move";
+        const forcedClass = m.isForcedMove ? "forced-next-move" : "";
         return `
-          <button class="move-btn ${universalClass}" data-move-id="${m.id}" ${disabledAttr}>
+          <button type="button" class="move-btn ${universalClass} ${forcedClass}" data-move-id="${m.id}" ${disabledAttr}>
             <div class="move-btn-top">
-              <span class="move-name">${m.name}</span>
+              <span class="move-name">
+                ${m.isForcedMove ? "⚡ " : ""}${m.name}
+              </span>
               <span class="move-badges">
                 ${m.element && m.element !== "None" ? `<span class="elem-tag">${m.element}${m.stab ? " ★STAB" : ""}</span>` : ""}
                 <span class="cost-tag">⚡ ${m.energyCost || 0}</span>
@@ -599,6 +617,11 @@ class GameApp {
             </div>
             <div class="move-formula">${m.formulaText || m.category} ${m.accuracy ? `• 🎯 ${m.accuracy}%` : ""}</div>
             <div class="move-desc">${m.description}</div>
+            ${
+              m.isForcedMove && m.usable
+                ? `<div class="move-queued-tag">⚡ REQUIRED FOLLOW-UP READY</div>`
+                : ""
+            }
             ${!m.usable ? `<div class="move-lock-reason">🔒 ${m.lockReason}</div>` : ""}
           </button>
         `;
@@ -632,6 +655,7 @@ class GameApp {
     const abilities = (unit.abilityIds || [])
       .map((id) => Registry.getAbility(id))
       .filter(Boolean);
+    const moves = this.engine.getAvailableMovesForUnit(unit);
 
     panel.innerHTML = `
       <div class="inspector-header">
@@ -676,6 +700,30 @@ class GameApp {
           ? `<div class="inspector-block">
               <h5>🔮 Item: ${item.name}</h5>
               <p>${item.description}</p>
+            </div>`
+          : ""
+      }
+
+      ${
+        moves.length > 0
+          ? `<div class="inspector-block">
+              <h5>⚔️ Active Form Skills (${unit.forms?.[unit.form]?.name || unit.form}):</h5>
+              <div class="inspector-skill-list">
+                ${moves
+                  .filter((m) => !m.isUniversal)
+                  .map(
+                    (m) => `
+                    <div class="inspector-skill-item ${m.usable ? "ready" : "locked"}">
+                      <div class="inspector-skill-head">
+                        <strong>${m.name}</strong>
+                        <span>⚡${m.energyCost} • ${m.usable ? "✅ Ready" : `🔒 ${m.lockReason}`}</span>
+                      </div>
+                      <small>${m.formulaText || ""} — ${m.description}</small>
+                    </div>
+                  `
+                  )
+                  .join("")}
+              </div>
             </div>`
           : ""
       }

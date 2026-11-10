@@ -1,13 +1,15 @@
 /**
  * BattleEngine
- * Core turn-based combat engine supporting all 7 Raid Bosses & Multi-Character Squads:
- * 1. Antikhonor, Broken God (War Armor, Glory, Linked Soul Spears, Destroyed HP)
- * 2. Ouroboros, The Swarm (Brood Queen Swarm Spawns, Evolution Counter, Queen's Spawn Vulnerability)
- * 3. Crypt-Keeper Novok (Gravewalker Revive, Shield-scaling Team-Up, Ally Death True DMG backlash)
- * 4. Ternax Hellfire (Lethal Lava Burn heal & Energy regen, Molten Immunity 50% TM resist, Hex bypass)
- * 5. First Genius, Zander (Transmutation 600 counter, 25/50/75% HP thresholds, β-Link 0-energy trap, Evolution State & Termination Counter)
- * 6. Allekheiros, Eternal Guardian (Forever Waiting stacking reduction, Ten Thousand Years Silent counter, Flectere & Stars Shall Weep enhancement)
- * 7. Theridine, Great Septimus (Godspawn 16x 50 HP bars, Communal Team Shields, 7-bar Im Anfang War die Tat charging & For One is Holy)
+ * Core turn-based combat engine with a clean Declarative Skill Sequencing & Requirement System:
+ *
+ * How Declarative Skill Sequencing Works (for any character or boss):
+ * 1. `minOtherSkillsUsed: 3` -> Skill is locked until the character has used at least 3 other non-universal skills.
+ * 2. `requiresPreviousSkill: "skill_a"` -> Skill is locked until the character's previous non-universal skill was "skill_a"
+ *    (Wait and Rest do NOT break the chain, so a unit can Rest/Wait to gather Energy for the follow-up!).
+ * 3. `forcesNextSkill: "skill_b"` -> After casting this skill, the character's `forcedNextSkillId` is set to "skill_b".
+ *    All other combat skills are locked until "skill_b" is cast (Wait and Rest remain unlocked if Energy is needed).
+ * 4. `upgradesSkill: { from: "skill_x", to: "skill_y" }` -> Permanently upgrades "skill_x" into "skill_y" on the unit.
+ * 5. `cannotCastManually: true` -> Only usable when triggered automatically by an ability or `forcesNextSkill`.
  */
 
 import { Registry } from "./Registry.js";
@@ -68,7 +70,6 @@ export class BattleEngine {
 
     this.log("⚔️ Battle Commences!", "special");
 
-    // Trigger onBattleStart hooks for abilities and items
     for (const unit of [...this.units]) {
       if (unit.currentHp <= 0) continue;
       for (const ab of this.getActiveAbilities(unit)) {
@@ -89,6 +90,10 @@ export class BattleEngine {
     const template = Registry.getCharacter(characterId);
     if (!template) throw new Error(`Unknown characterId: ${characterId}`);
 
+    // Deep-clone forms so per-unit skill upgrades (like Heart of Thorns -> Stars Shall Weep) never mutate shared templates
+    const clonedForms = JSON.parse(JSON.stringify(template.forms));
+    const initialFormKey = clonedForms.base ? "base" : Object.keys(clonedForms)[0];
+
     const instanceId = `${characterId}_${this.nextInstanceCounter++}`;
     const unit = {
       id: instanceId,
@@ -100,9 +105,10 @@ export class BattleEngine {
       isBoss: Boolean(template.isBoss),
       isMinion: Boolean(template.isMinion),
       isSummon: false,
-      form: "base",
-      forms: template.forms,
-      avatar: template.forms.base.avatar || template.avatar,
+      form: initialFormKey,
+      forms: clonedForms,
+      activeMoveIds: [...(clonedForms[initialFormKey]?.moves || [])],
+      avatar: clonedForms[initialFormKey]?.avatar || template.avatar,
       types: [...(template.types || [])],
       speciesId: template.speciesId,
       itemId: customItemId ?? template.defaultItemId ?? "none",
@@ -128,7 +134,9 @@ export class BattleEngine {
       turnMeter: 0,
       stance: "normal",
       skillsUsedCount: 0,
+      lastNonUniversalSkillId: null,
       forcedNextSkillId: null,
+      skillUpgrades: {}, // { heart_of_thorns: "stars_shall_weep" }
       blockRevive: false,
       cooldowns: {},
       statuses: [],
@@ -137,6 +145,44 @@ export class BattleEngine {
 
     this.units.push(unit);
     return unit;
+  }
+
+  /**
+   * Cleanly switches a unit's form (e.g. Karnage Base <-> Alternate, Zander Base <-> Evolution, Allekheiros Base -> Enhanced)
+   * and immediately refreshes `unit.activeMoveIds` and `unit.avatar`.
+   */
+  transformUnitForm(unit, newFormKey) {
+    if (!unit) return;
+    const targetForm = unit.forms?.[newFormKey] || Registry.getCharacter(unit.templateId)?.forms?.[newFormKey];
+    if (!targetForm) return;
+
+    unit.form = newFormKey;
+    unit.forms[newFormKey] = JSON.parse(JSON.stringify(targetForm));
+    unit.avatar = targetForm.avatar || unit.avatar;
+    this.syncUnitActiveMoves(unit);
+  }
+
+  /**
+   * Synchronizes `unit.activeMoveIds` from the unit's current form and applies any permanent `skillUpgrades`.
+   */
+  syncUnitActiveMoves(unit) {
+    if (!unit || unit.isActionlessTotem) {
+      if (unit) unit.activeMoveIds = [];
+      return;
+    }
+    const templateForms = Registry.getCharacter(unit.templateId)?.forms || {};
+    const formObj =
+      unit.forms?.[unit.form] ||
+      templateForms[unit.form] ||
+      unit.forms?.base ||
+      templateForms.base;
+
+    const rawMoves = formObj?.moves ? [...formObj.moves] : [];
+    const upgrades = unit.skillUpgrades || {};
+    unit.activeMoveIds = rawMoves.map((mId) => upgrades[mId] || mId);
+    if (formObj?.avatar) {
+      unit.avatar = formObj.avatar;
+    }
   }
 
   spawnSwarmMinion(teamId) {
@@ -172,6 +218,7 @@ export class BattleEngine {
       linkedTargetName: targetHero.name,
       form: "base",
       forms: { base: { name: "Construct", avatar: summonDef.avatar, moves: [] } },
+      activeMoveIds: [],
       avatar: summonDef.avatar,
       types: summonDef.types,
       speciesId: summonDef.speciesId,
@@ -189,7 +236,9 @@ export class BattleEngine {
       turnMeter: 0,
       stance: "normal",
       skillsUsedCount: 0,
+      lastNonUniversalSkillId: null,
       forcedNextSkillId: null,
+      skillUpgrades: {},
       blockRevive: true,
       cooldowns: {},
       statuses: [],
@@ -321,8 +370,6 @@ export class BattleEngine {
     const dmg = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.05));
     this.dealTrueDamage(unit, dmg, "Burn");
 
-    // Ternax Hellfire's Lethal Lava:
-    // "Regenerates 5 energy whenever any character takes damage from [Burn] debuffs."
     for (const u of this.getLivingUnits()) {
       if (this.getActiveAbilities(u).some((a) => a.id === "lethal_lava")) {
         u.currentEnergy = Math.min(u.maxEnergy, u.currentEnergy + 5);
@@ -331,14 +378,9 @@ export class BattleEngine {
     }
   }
 
-  /**
-   * Central Damage Application (Handles Communal Shield, Unit Shield, Block Damage, Unkillable,
-   * Zander 25/50/75% HP Thresholds & Evolution Damage Tracking, and Theridine Multi-Bar Godspawn!)
-   */
   applyCalculatedDamage(target, amount, { attacker = null, bypassShieldsAndBlocks = false, sourceLabel = null } = {}) {
     if (target.currentHp <= 0 || amount <= 0) return 0;
 
-    // 1. Check [Block Damage] buff
     if (!bypassShieldsAndBlocks && this.statusManager.hasFlag(target, "blockDamage")) {
       this.log(`🛡️ ${target.name}'s [Block Damage] negates all damage!`, "info");
       return 0;
@@ -346,7 +388,6 @@ export class BattleEngine {
 
     let remaining = Math.max(1, Math.round(amount));
 
-    // 2. Deplete Communal Team Shield first (Granted by Theridine's Godspawn)
     if (!bypassShieldsAndBlocks && (this.communalShields[target.teamId] || 0) > 0) {
       const absorbed = Math.min(this.communalShields[target.teamId], remaining);
       this.communalShields[target.teamId] -= absorbed;
@@ -358,7 +399,6 @@ export class BattleEngine {
       if (remaining <= 0) return 0;
     }
 
-    // 3. Deplete Personal [Shield] buff
     if (!bypassShieldsAndBlocks && (target.shieldHp || 0) > 0) {
       const absorbed = Math.min(target.shieldHp, remaining);
       target.shieldHp -= absorbed;
@@ -370,7 +410,6 @@ export class BattleEngine {
       if (remaining <= 0) return 0;
     }
 
-    // 4. Special Multi-Bar Handling for Theridine, Great Septimus ("Godspawn")
     if (target.templateId === "theridine_great_septimus") {
       return this.applyDamageToTheridine(target, remaining, attacker);
     }
@@ -378,7 +417,6 @@ export class BattleEngine {
     const oldHpPct = (target.currentHp / target.effectiveMaxHp) * 100;
     let actual = Math.min(target.currentHp, remaining);
 
-    // Check [Unkillable] buff
     if (
       !bypassShieldsAndBlocks &&
       this.statusManager.hasFlag(target, "unkillable") &&
@@ -395,7 +433,6 @@ export class BattleEngine {
       this.log(`💥 ${target.name} takes ${actual} damage from ${sourceLabel}!`, "damage");
     }
 
-    // Track First Genius, Zander's Evolution damage & Base Form 75%/50%/25% HP thresholds
     if (target.templateId === "first_genius_zander" && actual > 0) {
       if (target.form === "evolution") {
         target.customCounters.evolutionDamageTaken =
@@ -424,7 +461,6 @@ export class BattleEngine {
         dmgLeft -= consumed;
         totalDealt += consumed;
 
-        // Check if Theridine is in the 7-bar Charging State (Im Anfang War die Tat)
         if ((theridine.customCounters.chargingBarsRemaining || 0) > 0) {
           theridine.customCounters.chargingBarsRemaining -= 1;
           const shieldGrant = Math.round(atkVal * 20);
@@ -445,7 +481,6 @@ export class BattleEngine {
           }
           theridine.currentHp = theridine.effectiveMaxHp;
         } else {
-          // Deplete one of the 16 primary Godspawn HP bars
           theridine.customCounters.hpBarsRemaining =
             (theridine.customCounters.hpBarsRemaining ?? 16) - 1;
           const shieldGrant = Math.round(atkVal * 10);
@@ -499,14 +534,13 @@ export class BattleEngine {
   }
 
   enterZanderEvolution(zander) {
-    zander.form = "evolution";
+    this.transformUnitForm(zander, "evolution");
     zander.baseStats.spd = 150;
-    zander.baseStats.def = -50; // +50% damage taken
+    zander.baseStats.def = -50;
     zander.baseStats.atk = 20;
     zander.abilityIds = ["foresights_rage", "almighty_immunity"];
     zander.customCounters.termination = 8;
     zander.customCounters.evolutionDamageTaken = 0;
-    zander.avatar = zander.forms.evolution.avatar;
     this.log(
       `⚛️ [${zander.name}] enters EVOLUTION STATE! (SPD: 150, DEF: -50, ATK: 20, Termination Counter = 8)!`,
       "crit"
@@ -514,14 +548,13 @@ export class BattleEngine {
   }
 
   exitZanderEvolution(zander) {
-    zander.form = "base";
+    this.transformUnitForm(zander, "base");
     zander.baseStats.spd = 110;
     zander.baseStats.def = 40;
     zander.baseStats.atk = 10;
     zander.abilityIds = ["genius_foresight", "almighty_immunity"];
     zander.customCounters.transmutation = 0;
     zander.customCounters.evolutionDamageTaken = 0;
-    zander.avatar = zander.forms.base.avatar;
     this.log(
       `⏳ [${zander.name}] returns to Base Form! Transmutation Counter reset to 0.`,
       "special"
@@ -540,14 +573,12 @@ export class BattleEngine {
     target.turnMeter = 0;
     this.log(`☠️ ${target.name} has been defeated!`, "crit");
 
-    // 1. Trigger unit's own onDeath abilities (e.g. Swarm Spawn's Queen's Spawn)
     for (const ab of this.getActiveAbilities(target)) {
       if (typeof ab.onDeath === "function") {
         ab.onDeath({ unit: target, killer, engine: this });
       }
     }
 
-    // 2. Trigger ally onAllyKilled abilities (e.g. Crypt-Keeper Novok's Gravewalker 20% True DMG backlash)
     const livingAllies = this.getLivingAlliesOf(target).filter(
       (a) => a.id !== target.id
     );
@@ -559,7 +590,6 @@ export class BattleEngine {
       }
     }
 
-    // 3. Summon destruction callback (e.g. Soul Spear)
     if (target.isSummon) {
       const summonDef = Registry.getSummon(target.templateId);
       if (summonDef && typeof summonDef.onDestroy === "function") {
@@ -590,64 +620,104 @@ export class BattleEngine {
     return this.winnerTeam;
   }
 
+  /**
+   * Builds the full list of moves for `unit`, refreshing from `syncUnitActiveMoves(unit)`
+   * and evaluating all declarative sequencing & prerequisite rules:
+   * - `minOtherSkillsUsed`
+   * - `requiresPreviousSkill`
+   * - `forcesNextSkill` (`unit.forcedNextSkillId`)
+   * - `cannotCastManually`
+   */
   getAvailableMovesForUnit(unit) {
-    if (!unit || unit.currentHp <= 0) return [];
-    const formObj = unit.forms[unit.form] || unit.forms.base;
-    const moveIds = [...formObj.moves, "wait", "rest"];
+    if (!unit || unit.currentHp <= 0 || unit.isActionlessTotem) return [];
+
+    // Always re-sync activeMoveIds from current form + upgrades so UI is never stale
+    this.syncUnitActiveMoves(unit);
+
+    const moveIds = [...(unit.activeMoveIds || []), "wait", "rest"];
     const hasZeroCostLink = this.statusManager.hasFlag(unit, "zeroEnergyCost");
 
-    return moveIds.map((moveId) => {
-      const skill = Registry.getSkill(moveId);
-      const cdRemaining = unit.cooldowns[moveId] || 0;
-      const effectiveEnergyCost = hasZeroCostLink ? 0 : skill.energyCost || 0;
-      let usable = true;
-      let lockReason = "";
+    return moveIds
+      .map((moveId) => {
+        const skill = Registry.getSkill(moveId);
+        if (!skill) return null;
 
-      if (skill.cannotCastManually && unit.forcedNextSkillId !== moveId) {
-        usable = false;
-        lockReason = "Triggered automatically by ability.";
-      }
+        const cdRemaining = unit.cooldowns[moveId] || 0;
+        const effectiveEnergyCost = hasZeroCostLink ? 0 : skill.energyCost || 0;
+        let usable = true;
+        let lockReason = "";
+        const isForcedMove = unit.forcedNextSkillId === moveId;
 
-      if (
-        usable &&
-        unit.forcedNextSkillId &&
-        moveId !== unit.forcedNextSkillId &&
-        moveId !== "wait" &&
-        moveId !== "rest"
-      ) {
-        const forcedSkill = Registry.getSkill(unit.forcedNextSkillId);
-        if (unit.currentEnergy >= (forcedSkill?.energyCost || 0)) {
+        // 1. If the unit has a `forcedNextSkillId` (e.g. All Realms Leveled after Glory to All Honorable Dead),
+        // ONLY the forced skill (or Wait/Rest if they need Energy) is allowed!
+        if (
+          unit.forcedNextSkillId &&
+          moveId !== unit.forcedNextSkillId &&
+          !skill.isUniversal
+        ) {
+          const forcedSkill = Registry.getSkill(unit.forcedNextSkillId);
           usable = false;
-          lockReason = `Must use ${forcedSkill.name} next!`;
+          lockReason = `Must use [${forcedSkill?.name || unit.forcedNextSkillId}] next!`;
         }
-      }
 
-      if (usable && cdRemaining > 0) {
-        usable = false;
-        lockReason = `Cooldown: ${cdRemaining}T`;
-      }
-
-      if (usable && unit.currentEnergy < effectiveEnergyCost) {
-        usable = false;
-        lockReason = `Needs ${effectiveEnergyCost} Energy`;
-      }
-
-      if (usable && typeof skill.canUse === "function") {
-        const check = skill.canUse({ attacker: unit, engine: this });
-        if (!check.allowed) {
+        // 2. Check `cannotCastManually` (e.g. Mode: Evolution, Cyclicity: α Scepter, For One is Holy)
+        if (usable && skill.cannotCastManually && !isForcedMove) {
           usable = false;
-          lockReason = check.reason;
+          lockReason = "Triggered automatically by ability.";
         }
-      }
 
-      return {
-        ...skill,
-        energyCost: effectiveEnergyCost,
-        usable,
-        lockReason,
-        cdRemaining,
-      };
-    });
+        // 3. Check `requiresPreviousSkill` (e.g. All Realms Leveled requires Glory to All Honorable Dead first;
+        // Fallen Star's Eulogy requires Larval Evolution; Flectere requires Ten Thousand Years Silent)
+        if (usable && skill.requiresPreviousSkill && !isForcedMove) {
+          if (unit.lastNonUniversalSkillId !== skill.requiresPreviousSkill) {
+            const reqSkill = Registry.getSkill(skill.requiresPreviousSkill);
+            usable = false;
+            lockReason = `Requires casting [${reqSkill?.name || skill.requiresPreviousSkill}] first.`;
+          }
+        }
+
+        // 4. Check `minOtherSkillsUsed` (e.g. Glory to All Honorable Dead requires 3 other skills used first)
+        if (usable && typeof skill.minOtherSkillsUsed === "number") {
+          const used = unit.skillsUsedCount || 0;
+          if (used < skill.minOtherSkillsUsed) {
+            usable = false;
+            lockReason = `Requires ${skill.minOtherSkillsUsed} skills used first (${used}/${skill.minOtherSkillsUsed}).`;
+          }
+        }
+
+        // 5. Cooldown check
+        if (usable && cdRemaining > 0) {
+          usable = false;
+          lockReason = `Cooldown: ${cdRemaining}T`;
+        }
+
+        // 6. Custom `canUse` hook
+        if (usable && typeof skill.canUse === "function") {
+          const check = skill.canUse({ attacker: unit, engine: this });
+          if (!check.allowed) {
+            usable = false;
+            lockReason = check.reason;
+          }
+        }
+
+        // 7. Energy check (checked last so prerequisite/sequence reasons are shown clearly first)
+        if (usable && unit.currentEnergy < effectiveEnergyCost) {
+          usable = false;
+          lockReason = isForcedMove
+            ? `Queued Next! Needs ${effectiveEnergyCost} Energy (Use Wait/Rest)`
+            : `Needs ${effectiveEnergyCost} Energy`;
+        }
+
+        return {
+          ...skill,
+          energyCost: effectiveEnergyCost,
+          usable,
+          isForcedMove,
+          lockReason,
+          cdRemaining,
+        };
+      })
+      .filter(Boolean);
   }
 
   advanceToNextTurn() {
@@ -695,7 +765,7 @@ export class BattleEngine {
       this.log(`${unit.name} recovers from Rest (full Defense restored).`, "info");
     }
     unit.stance = "normal";
-    unit.avatar = (unit.forms[unit.form] || unit.forms.base).avatar;
+    this.syncUnitActiveMoves(unit);
 
     for (const key of Object.keys(unit.cooldowns)) {
       if (unit.cooldowns[key] > 0) {
@@ -786,6 +856,7 @@ export class BattleEngine {
     const skill = Registry.getSkill(skillId);
     if (!skill) return;
     this.runSkillResolution(attacker, skill, null, { isFreeCounter: true });
+    this.syncUnitActiveMoves(attacker);
   }
 
   executeAction({ actorId, moveId, targetId = null }) {
@@ -806,8 +877,7 @@ export class BattleEngine {
       attacker.cooldowns[skill.id] = skill.cooldown;
     }
 
-    // Check Zander's Extrapolation: β Link trap!
-    // "If any enemy uses any move besides Rest or Wait, deal massive damage to them. This energy cost reduction is removed after enemies take their turn."
+    // Check Zander's Extrapolation: β Link trap
     if (this.statusManager.hasStatus(attacker, "extrapolation_link")) {
       this.statusManager.removeStatus(attacker, "extrapolation_link", {
         forceProtected: true,
@@ -826,11 +896,30 @@ export class BattleEngine {
       }
     }
 
-    // Track skill usage count & Zander's Transmutation Counter
+    // Declarative Skill Sequencing & Upgrade Tracking (Wait/Rest do not break skill chains!)
     if (!skill.isUniversal) {
-      attacker.skillsUsedCount += 1;
+      attacker.skillsUsedCount = (attacker.skillsUsedCount || 0) + 1;
+      attacker.lastNonUniversalSkillId = skill.id;
+
+      // Clear forcedNextSkillId if this was the forced skill
       if (attacker.forcedNextSkillId === skill.id) {
         attacker.forcedNextSkillId = null;
+      }
+
+      // If this skill declaratively forces a follow-up skill (e.g. Glory -> All Realms Leveled)
+      if (skill.forcesNextSkill) {
+        attacker.forcedNextSkillId = skill.forcesNextSkill;
+        const nextSkillDef = Registry.getSkill(skill.forcesNextSkill);
+        this.log(
+          `⛓️ [${attacker.name}] next required skill queued: [${nextSkillDef?.name || skill.forcesNextSkill}]!`,
+          "special"
+        );
+      }
+
+      // If this skill declaratively upgrades a skill (e.g. Flectere upgrades Heart of Thorns -> Stars Shall Weep)
+      if (skill.upgradesSkill && skill.upgradesSkill.from && skill.upgradesSkill.to) {
+        if (!attacker.skillUpgrades) attacker.skillUpgrades = {};
+        attacker.skillUpgrades[skill.upgradesSkill.from] = skill.upgradesSkill.to;
       }
 
       // First Genius, Zander: Genius's Foresight Transmutation Counter
@@ -858,8 +947,9 @@ export class BattleEngine {
 
     this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
 
-    // End of Turn Hooks & Status Ticking
-    attacker.avatar = (attacker.forms[attacker.form] || attacker.forms.base).avatar;
+    // Re-sync active moves & avatar after skill execution (handles Metamorph, Evolution, Stars Shall Weep upgrade)
+    this.syncUnitActiveMoves(attacker);
+
     for (const ab of this.getActiveAbilities(attacker)) {
       if (typeof ab.onTurnEnd === "function") {
         ab.onTurnEnd({ unit: attacker, engine: this });
@@ -867,7 +957,7 @@ export class BattleEngine {
     }
     this.statusManager.tickStatuses(attacker, "TURN_END");
 
-    // Check Theridine's Im Anfang War die Tat immediate post-enemy action!
+    // Check Theridine's Im Anfang War die Tat immediate post-enemy action
     const enemyTheridine = this.getLivingEnemiesOf(attacker).find(
       (e) =>
         e.templateId === "theridine_great_septimus" &&
@@ -952,8 +1042,6 @@ export class BattleEngine {
 
         let totalDamageToTarget = 0;
 
-        // Check Ternax Hellfire's Lethal Lava:
-        // "When attacking enemies under a [Hex] debuff, will ignore 50% of their DEF, [Block Damage], [Shield] and [Unkillable] buffs."
         const bypassShieldsAndBlocks =
           this.getActiveAbilities(attacker).some((a) => a.id === "lethal_lava") &&
           this.statusManager.hasStatus(target, "hex");
@@ -1045,47 +1133,56 @@ export class BattleEngine {
   }
 
   /**
-   * Boss & Minion Tactical AI
+   * Smart AI for Bosses & Minions (Respects `forcedNextSkillId`, `minOtherSkillsUsed`, and `requiresPreviousSkill`)
    */
   computeAiAction(unit) {
     if (!unit || unit.currentHp <= 0) return null;
-    const moves = this.getAvailableMovesForUnit(unit).filter((m) => m.usable);
+    const allMoves = this.getAvailableMovesForUnit(unit);
+    const usableMoves = allMoves.filter((m) => m.usable);
     const enemies = this.getLivingEnemiesOf(unit);
-    if (enemies.length === 0 || moves.length === 0) return null;
+    if (enemies.length === 0 || usableMoves.length === 0) return null;
 
-    // Prioritize [Hex] targets if unit is Ternax Hellfire
     const hexTarget = enemies.find((e) => this.statusManager.hasStatus(e, "hex"));
     const lowestHpTarget = [...enemies].sort((a, b) => a.currentHp - b.currentHp)[0];
     const defaultTarget = hexTarget || lowestHpTarget || enemies[0];
 
-    // 1. Forced skill check (All Realms Leveled, Fallen Star's Eulogy, Flectere si Nequeno, Cyclicity)
+    // 1. If a skill is forced next (e.g. All Realms Leveled after Glory to All Honorable Dead),
+    // cast it immediately if usable, or Rest/Wait to build Energy for it!
     if (unit.forcedNextSkillId) {
-      const forced = moves.find((m) => m.id === unit.forcedNextSkillId);
-      if (forced) {
-        return { actorId: unit.id, moveId: forced.id, targetId: defaultTarget.id };
+      const forcedUsable = usableMoves.find((m) => m.id === unit.forcedNextSkillId);
+      if (forcedUsable) {
+        return { actorId: unit.id, moveId: forcedUsable.id, targetId: defaultTarget.id };
       }
-      const restMove = moves.find((m) => m.id === "rest");
-      if (restMove) return { actorId: unit.id, moveId: "rest", targetId: unit.id };
+      const energyMove = unit.currentHp > unit.effectiveMaxHp * 0.5 ? "rest" : "wait";
+      return { actorId: unit.id, moveId: energyMove, targetId: unit.id };
     }
 
-    // 2. Boss-specific signature priorities
+    // 2. If a setup skill (that forces a sequel, like Glory to All Honorable Dead, Larval Evolution, Ten Thousand Years Silent)
+    // is unlocked and usable, prioritize casting it!
+    const setupSkills = usableMoves.filter((m) => Boolean(m.forcesNextSkill));
+    if (setupSkills.length > 0) {
+      return {
+        actorId: unit.id,
+        moveId: setupSkills[0].id,
+        targetId: defaultTarget.id,
+      };
+    }
+
+    // 3. Other Boss Signature Moves
     const priorityIds = [
-      "glory_to_all_honorable_dead",
       "im_anfang_war_die_tat",
-      "ten_thousand_years_silent",
-      "larval_evolution",
       "walker_among_graves",
       "hexreaper",
       "extrapolation_beta_link",
     ];
     for (const pid of priorityIds) {
-      const found = moves.find((m) => m.id === pid);
-      if (found && this.rng() < 0.7) {
+      const found = usableMoves.find((m) => m.id === pid);
+      if (found && this.rng() < 0.75) {
         return { actorId: unit.id, moveId: found.id, targetId: defaultTarget.id };
       }
     }
 
-    const combatMoves = moves.filter((m) => !m.isUniversal);
+    const combatMoves = usableMoves.filter((m) => !m.isUniversal);
     if (combatMoves.length === 0) {
       const energyMove = unit.currentHp > unit.effectiveMaxHp * 0.6 ? "rest" : "wait";
       return { actorId: unit.id, moveId: energyMove, targetId: unit.id };
@@ -1123,7 +1220,8 @@ export class BattleEngine {
     this.extraTurnQueue = snapshot.extraTurnQueue || [];
     this.winnerTeam = snapshot.winnerTeam;
     this.communalShields = snapshot.communalShields || { 1: 0, 2: 0 };
-    this.units = snapshot.units;
+    this.units = snapshot.units || [];
+    this.units.forEach((u) => this.syncUnitActiveMoves(u));
     this.logs = snapshot.logs || [];
   }
 }

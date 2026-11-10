@@ -663,6 +663,54 @@ body {
   font-weight: 600;
 }
 
+.move-queued-tag {
+  font-size: 0.7rem;
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.move-btn.forced-next-move {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.inspector-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inspector-skill-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.inspector-skill-item.ready {
+  border-left: 3px solid var(--accent-emerald);
+}
+
+.inspector-skill-item.locked {
+  border-left: 3px solid var(--accent-crimson);
+  opacity: 0.85;
+}
+
+.inspector-skill-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  margin-bottom: 2px;
+}
+
+.inspector-skill-head span {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
 /* SIDEBAR: INSPECTOR & LOGS */
 .sidebar-column {
   display: flex;
