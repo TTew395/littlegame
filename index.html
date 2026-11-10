@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Realms of Anarchy — WebRTC Turn-Based Squad & Raid Battler</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- TOP NAVIGATION & MODE BAR -->
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-logo">⚔️</span>
+      <div>
+        <h1>Realms of Anarchy</h1>
+        <small>WebRTC P2P Multi-Character Turn-Based Battler</small>
+      </div>
+    </div>
+
+    <div class="mode-switcher">
+      <button class="pill-btn active" data-preset="raid_5v1" title="5 Heroes vs Antikhonor, Broken God">
+        👑 5v1 Boss Raid (Antikhonor)
+      </button>
+      <button class="pill-btn" data-preset="duel_1v1" title="Karnage the Anarch vs Antikhonor">
+        👹 1v1 Duel (Karnage vs Antikhonor)
+      </button>
+      <button class="pill-btn" data-preset="squad_pvp" title="3v3 Tactical Squad Battle">
+        ⚔️ 3v3 Squad PvP
+      </button>
+    </div>
+
+    <div class="top-actions">
+      <span id="network-status-badge" class="net-badge" data-state="offline">
+        📡 Local / AI Mode
+      </span>
+      <button id="toggle-ai-btn" class="action-btn active">🤖 Enemy AI: ON</button>
+      <button id="open-webrtc-btn" class="action-btn highlight">🌐 WebRTC Multiplayer</button>
+      <button id="open-codex-btn" class="action-btn">📖 Character Codex</button>
+      <button id="restart-battle-btn" class="action-btn">🔄 Reset</button>
+    </div>
+  </header>
+
+  <!-- TURN METER ORDER RIBBON -->
+  <section class="turn-ribbon-bar">
+    <div class="ribbon-title">⚡ Turn Order (1000 TM)</div>
+    <div id="turn-order-ribbon" class="turn-order-ribbon"></div>
+  </section>
+
+  <!-- MAIN BATTLEFIELD & SIDEBAR -->
+  <main class="workspace-grid">
+    <!-- LEFT / CENTER: ARENA + COMMAND DECK -->
+    <div class="battle-column">
+      <div class="arena-grid">
+        <!-- TEAM 1 (HEROES / PLAYER 1) -->
+        <section class="team-zone team-1-zone">
+          <div class="zone-header">
+            <h2>🛡️ Team 1 — Strike Force</h2>
+            <span class="zone-hint">Click ally or enemy to inspect</span>
+          </div>
+          <div id="team-1-container" class="units-list"></div>
+        </section>
+
+        <!-- TEAM 2 (RAID BOSS + SOUL SPEARS / PLAYER 2) -->
+        <section class="team-zone team-2-zone">
+          <div class="zone-header">
+            <h2>🔥 Team 2 — Antikhonor & Legions</h2>
+            <span class="zone-hint">Click an enemy or Soul Spear to target 🎯</span>
+          </div>
+          <div id="team-2-container" class="units-list"></div>
+        </section>
+      </div>
+
+      <!-- ACTION COMMAND DECK -->
+      <section class="command-section">
+        <div id="active-actor-banner" class="active-actor-banner"></div>
+        <div id="command-deck" class="command-deck"></div>
+      </section>
+    </div>
+
+    <!-- RIGHT SIDEBAR: INSPECTOR + COMBAT LOG -->
+    <aside class="sidebar-column">
+      <section class="inspector-card">
+        <div class="card-title">🔍 Character & Ability Inspector</div>
+        <div id="inspector-content" class="inspector-content"></div>
+      </section>
+
+      <section class="log-card">
+        <div class="card-title">📜 Battle Event Log</div>
+        <div id="combat-log-list" class="combat-log-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- WEBRTC P2P MULTIPLAYER MODAL -->
+  <div id="webrtc-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>🌐 WebRTC Peer-to-Peer Multiplayer (GitHub Pages)</h2>
+        <button id="close-webrtc-btn" class="close-btn">✕</button>
+      </div>
+      <p class="modal-status" id="webrtc-modal-status">
+        Connect two browsers directly over WebRTC DataChannels. Host runs Team 1; Peer controls Team 2 (or Boss).
+      </p>
+
+      <div class="webrtc-split">
+        <!-- OPTION A: ROOM CODE VIA PEERJS -->
+        <div class="webrtc-box">
+          <h3>Option 1: Quick Room Code (PeerJS)</h3>
+          <p>Enter a custom room code (or leave blank to generate one) and share it with your opponent.</p>
+          <input id="room-code-input" type="text" placeholder="e.g. ANARCH-77" class="text-input" />
+          <div class="btn-row">
+            <button id="host-room-btn" class="action-btn highlight">Host Room (Team 1)</button>
+            <button id="join-room-btn" class="action-btn">Join Room (Team 2)</button>
+          </div>
+        </div>
+
+        <!-- OPTION B: ZERO-SERVER SDP COPY-PASTE -->
+        <div class="webrtc-box">
+          <h3>Option 2: Zero-Server SDP Token Copy/Paste</h3>
+          <p>1. Host clicks <b>Create Offer</b> & sends token to Peer.<br/>
+             2. Peer pastes token, clicks <b>Create Answer</b> & sends back.<br/>
+             3. Host pastes answer & clicks <b>Connect</b>.</p>
+          <textarea id="sdp-token-box" rows="4" placeholder="Paste SDP Offer or Answer token here..." class="text-area"></textarea>
+          <div class="btn-row">
+            <button id="create-sdp-offer-btn" class="action-btn">1. Create Offer (Host)</button>
+            <button id="accept-sdp-offer-btn" class="action-btn">2. Create Answer (Peer)</button>
+            <button id="complete-sdp-btn" class="action-btn highlight">3. Complete (Host)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARACTER & ARCHITECTURE CODEX MODAL -->
+  <div id="codex-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>📖 Registered Roster & Modular Content Registry</h2>
+        <button id="close-codex-btn" class="close-btn">✕</button>
+      </div>
+      <p class="modal-status">
+        All characters, bosses, items, skills, species, and statuses are loaded dynamically from <code>src/data/*.js</code>.
+      </p>
+      <div id="codex-body" class="codex-grid"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
