@@ -1,3 +1,4 @@
+name=abilities.js
 /**
  * Passive Abilities Registry (Emoji-free)
  * Includes all Champions & Raid Bosses:
@@ -89,7 +90,7 @@ export const ABILITY_LIST = [
     id: "yautja_cloak",
     name: "Yautja Cloak",
     description:
-      "At the start of each round, has a 50% chance to evade incoming skills (decreases to 0% upon taking a turn). Each time this character kills an enemy, increases their chance of evasion by 20%, stacking up to 60%. Whenever this character successfully evades an enemy's skill, counterattacks with Wrist Blades.",
+      "At the start of battle, has a 50% chance to evade incoming skills (decreases to 0% upon taking their first turn). Each time this character kills an enemy, increases their chance of evasion by 20%, stacking up to 60%. Whenever this character successfully evades an enemy's skill, counterattacks with Wrist Blades.",
     flags: {
       yautjaCloakEvasion: true,
       counterOnEvade: true,
@@ -99,18 +100,9 @@ export const ABILITY_LIST = [
       unit.customCounters.killEvasionBonus = 0;
       unit.customCounters.predatorMovesUsed = {};
       engine.log(
-        `[${unit.name}] Yautja Cloak active: 50% Evasion chance until taking a turn.`,
+        `[${unit.name}] Yautja Cloak active: 50% Evasion chance before first turn.`,
         "special"
       );
-    },
-    onRoundStart({ unit, engine }) {
-      if (unit.currentHp > 0 && !unit.customCounters.cloakStartEvasionActive) {
-        unit.customCounters.cloakStartEvasionActive = true;
-        engine.log(
-          `[${unit.name}] Yautja Cloak re-engages for the new round (50% Evasion until taking a turn).`,
-          "info"
-        );
-      }
     },
     onTurnStart({ unit }) {
       unit.customCounters.cloakStartEvasionActive = false;
@@ -637,12 +629,13 @@ export const ABILITY_LIST = [
     id: "godspawn",
     name: "Godspawn",
     description:
-      "Theridine has 16 HP bars of 50 HP each (MAX HP per bar is considered 50). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 10x Theridine's ATK (or 20x ATK per charging bar broken during Im Anfang War die Tat). Stacks.",
+      "Theridine has 16 HP bars of 50 HP each (MAX HP per bar is considered 50). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 10x Theridine's ATK (or 20x ATK per 50 HP charging bar broken during Im Anfang War die Tat). Stacks.",
     onBattleStart({ unit, engine }) {
       unit.customCounters.hpBarsRemaining = 16;
       unit.customCounters.maxHpBars = 16;
       unit.customCounters.chargingBarsRemaining = 0;
       unit.customCounters.chargingReactionsLeft = 0;
+      unit.customCounters.chargingBarHp = 50;
       engine.log(
         `[${unit.name}] Godspawn manifests with 16 Sacred Health Bars (50 HP per bar).`,
         "special"
