@@ -104,10 +104,10 @@ export const ABILITY_LIST = [
       );
     },
     onRoundStart({ unit, engine }) {
-      if (unit.currentHp > 0 && !unit.customCounters.cloakStartEvasionActive && unit.customCounters.killEvasionBonus != 0;) {
-        unit.customCounter.cloakStartEvasionActive = true;
+      if (unit.currentHp > 0 && !unit.customCounters.cloakStartEvasionActive) {
+        unit.customCounters.cloakStartEvasionActive = true;
         engine.log(
-          `[${unit.name}] Yautja Cloak re-engages (${Math.round(unit.customCounters.killEvasionBonus * 100)}% chance to Evade).`,
+          `[${unit.name}] Yautja Cloak re-engages for the new round (50% Evasion until taking a turn).`,
           "info"
         );
       }
