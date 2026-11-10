@@ -649,31 +649,6 @@ export const ABILITY_LIST = [
       );
     },
   },
-  {
-    id: "temporal_overdrive",
-    name: "Temporal Overdrive",
-    description:
-      "At the end of each turn, increases this character's Crit Damage by 10% (Battle Focus) and restores 8 Energy.",
-    onTurnEnd({ unit, engine }) {
-      engine.statusManager.applyStatus(unit, unit, "poise_focus", { stacks: 1 });
-      unit.currentEnergy = Math.min(unit.maxEnergy, unit.currentEnergy + 8);
-    },
-  },
-  {
-    id: "astral_ward",
-    name: "Astral Ward",
-    description:
-      "Decreases damage taken by all allies by 10% while this character is alive.",
-    modifyIncomingDamage({ damage }) {
-      return damage * 0.9;
-    },
-  },
-  {
-    id: "dragon_blood_fury",
-    name: "Dragonblood Fury",
-    description:
-      "Deals 15% more damage against targets with more than 50% HP, or ignores 20% DEF against targets below 50% HP.",
-  },
 ];
 
 export function registerAllAbilities() {
