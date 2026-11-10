@@ -1,10 +1,5 @@
 /**
- * StatusManager
- * Handles applying, stacking, refreshing, ticking, and cleansing buffs & debuffs:
- * - Stacking vs Non-Stacking statuses
- * - Turn-ticking ("TURN_START", "TURN_END") vs Turn-Independent ("NEVER") statuses
- * - Protected statuses (cannot be cleansed/stolen)
- * - Immunity checks & Special Absorption (e.g. Ternax Hellfire's Lethal Lava absorbing [Burn])
+ * StatusManager (Emoji-free)
  */
 
 import { Registry } from "./Registry.js";
@@ -64,7 +59,6 @@ export class StatusManager {
     if (!def) return false;
 
     // Special Boss Hook: Ternax Hellfire's "Lethal Lava"
-    // "Whenever Ternax receives a [Burn] debuff, instantly removes it and heals Ternax by 10% of their MAX HP."
     if (
       statusId === "burn" &&
       this.engine.getActiveAbilities(target).some((a) => a.id === "lethal_lava")
@@ -72,24 +66,23 @@ export class StatusManager {
       const healAmt = Math.max(1, Math.floor(target.effectiveMaxHp * 0.1));
       target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + healAmt);
       this.engine.log(
-        `🌋 [${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP)!`,
+        `[${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP).`,
         "heal"
       );
       return false;
     }
 
-    // Check debuff immunity / Block Debuffs (unless bypassImmunity is true, e.g., Queen's Spawn Vulnerability or Magma Pound Hex)
     if (def.category === "debuff" && !bypassImmunity) {
       if (this.isImmuneTo(target, statusId)) {
         if (!silent) {
-          this.engine.log(`🛡️ ${target.name} is immune to [${def.name}]!`, "info");
+          this.engine.log(`${target.name} is immune to [${def.name}].`, "info");
         }
         return false;
       }
       if (this.hasFlag(target, "blockDebuffs")) {
         if (!silent) {
           this.engine.log(
-            `✨ ${target.name}'s [Block Debuffs] blocked [${def.name}]!`,
+            `${target.name}'s [Block Debuffs] blocked [${def.name}].`,
             "info"
           );
         }
@@ -130,7 +123,7 @@ export class StatusManager {
     }
 
     if (!silent) {
-      const protText = protectedFlag ? " 🔒" : "";
+      const protText = protectedFlag ? " [PROTECTED]" : "";
       const durText =
         def.tickTiming === "NEVER" || duration === null ? "" : ` (${duration}T)`;
       const stackText =
@@ -138,7 +131,7 @@ export class StatusManager {
           ? ` [x${this.getStacks(target, statusId)}]`
           : "";
       this.engine.log(
-        `${def.icon} ${target.name} gains [${def.name}]${stackText}${durText}${protText}.`,
+        `${target.name} gains [${def.name}]${stackText}${durText}${protText}.`,
         def.category === "debuff" ? "status" : "info"
       );
     }
@@ -194,7 +187,7 @@ export class StatusManager {
     );
     if (idx !== -1) {
       const removed = target.statuses.splice(idx, 1)[0];
-      this.engine.log(`✨ Cleansed [${removed.name}] from ${target.name}.`, "heal");
+      this.engine.log(`Cleansed [${removed.name}] from ${target.name}.`, "heal");
       return true;
     }
     return false;
@@ -203,7 +196,6 @@ export class StatusManager {
   tickStatuses(unit, timing) {
     if (unit.currentHp <= 0) return;
 
-    // Trigger start-of-turn DoTs (Bleed / Burn)
     if (timing === "TURN_START") {
       for (const st of [...unit.statuses]) {
         if (st.id === "bleed") {
@@ -219,7 +211,6 @@ export class StatusManager {
       }
     }
 
-    // Decrement duration on statuses matching `timing` (TURN_START or TURN_END)
     const remaining = [];
     for (const st of unit.statuses) {
       const def = Registry.getStatus(st.id);
@@ -234,7 +225,7 @@ export class StatusManager {
           remaining.push(st);
         } else {
           if (st.id === "shield") unit.shieldHp = 0;
-          this.engine.log(`⏱️ [${st.name}] wore off from ${unit.name}.`, "info");
+          this.engine.log(`[${st.name}] wore off from ${unit.name}.`, "info");
         }
       } else {
         remaining.push(st);

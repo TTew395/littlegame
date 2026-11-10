@@ -1,15 +1,9 @@
 /**
- * BattleEngine
- * Core turn-based combat engine with a clean Declarative Skill Sequencing & Requirement System:
+ * BattleEngine (Emoji-free + Condensed Multi-Hit Combat Readouts)
  *
- * How Declarative Skill Sequencing Works (for any character or boss):
- * 1. `minOtherSkillsUsed: 3` -> Skill is locked until the character has used at least 3 other non-universal skills.
- * 2. `requiresPreviousSkill: "skill_a"` -> Skill is locked until the character's previous non-universal skill was "skill_a"
- *    (Wait and Rest do NOT break the chain, so a unit can Rest/Wait to gather Energy for the follow-up!).
- * 3. `forcesNextSkill: "skill_b"` -> After casting this skill, the character's `forcedNextSkillId` is set to "skill_b".
- *    All other combat skills are locked until "skill_b" is cast (Wait and Rest remain unlocked if Energy is needed).
- * 4. `upgradesSkill: { from: "skill_x", to: "skill_y" }` -> Permanently upgrades "skill_x" into "skill_y" on the unit.
- * 5. `cannotCastManually: true` -> Only usable when triggered automatically by an ability or `forcesNextSkill`.
+ * Multi-hit skills (e.g. Sufferslash x2, Trinity of Pain x3, Pyre of High Graves x3, For One is Holy x7)
+ * now combine their per-hit calculations into a single concise log line per target:
+ *   e.g. "Karnage the Anarch [Trinity of Pain] -> Antikhonor: 63 DMG (3 hits: 21 + 21 + 21)"
  */
 
 import { Registry } from "./Registry.js";
@@ -40,7 +34,6 @@ export class BattleEngine {
     this.logs = [];
     this.nextInstanceCounter = 1;
 
-    // Communal Shield pool per team (Granted by Theridine's Godspawn when HP bars break)
     this.communalShields = { 1: 0, 2: 0 };
 
     this.statusManager = new StatusManager(this);
@@ -68,7 +61,7 @@ export class BattleEngine {
     team1Config.forEach((cfg) => this.spawnCharacter(cfg.characterId, 1, cfg.itemId));
     team2Config.forEach((cfg) => this.spawnCharacter(cfg.characterId, 2, cfg.itemId));
 
-    this.log("⚔️ Battle Commences!", "special");
+    this.log("Battle Commences.", "special");
 
     for (const unit of [...this.units]) {
       if (unit.currentHp <= 0) continue;
@@ -90,7 +83,6 @@ export class BattleEngine {
     const template = Registry.getCharacter(characterId);
     if (!template) throw new Error(`Unknown characterId: ${characterId}`);
 
-    // Deep-clone forms so per-unit skill upgrades (like Heart of Thorns -> Stars Shall Weep) never mutate shared templates
     const clonedForms = JSON.parse(JSON.stringify(template.forms));
     const initialFormKey = clonedForms.base ? "base" : Object.keys(clonedForms)[0];
 
@@ -136,7 +128,7 @@ export class BattleEngine {
       skillsUsedCount: 0,
       lastNonUniversalSkillId: null,
       forcedNextSkillId: null,
-      skillUpgrades: {}, // { heart_of_thorns: "stars_shall_weep" }
+      skillUpgrades: {},
       blockRevive: false,
       cooldowns: {},
       statuses: [],
@@ -147,13 +139,11 @@ export class BattleEngine {
     return unit;
   }
 
-  /**
-   * Cleanly switches a unit's form (e.g. Karnage Base <-> Alternate, Zander Base <-> Evolution, Allekheiros Base -> Enhanced)
-   * and immediately refreshes `unit.activeMoveIds` and `unit.avatar`.
-   */
   transformUnitForm(unit, newFormKey) {
     if (!unit) return;
-    const targetForm = unit.forms?.[newFormKey] || Registry.getCharacter(unit.templateId)?.forms?.[newFormKey];
+    const targetForm =
+      unit.forms?.[newFormKey] ||
+      Registry.getCharacter(unit.templateId)?.forms?.[newFormKey];
     if (!targetForm) return;
 
     unit.form = newFormKey;
@@ -162,9 +152,6 @@ export class BattleEngine {
     this.syncUnitActiveMoves(unit);
   }
 
-  /**
-   * Synchronizes `unit.activeMoveIds` from the unit's current form and applies any permanent `skillUpgrades`.
-   */
   syncUnitActiveMoves(unit) {
     if (!unit || unit.isActionlessTotem) {
       if (unit) unit.activeMoveIds = [];
@@ -335,21 +322,21 @@ export class BattleEngine {
 
     if (deltaFraction < 0 && !bypassImmunity) {
       if (this.hasAbilityFlag(unit, "immuneToTurnMeterReduction")) {
-        this.log(`🛡️ ${unit.name} is immune to Turn Meter reduction!`, "info");
+        this.log(`${unit.name} is immune to Turn Meter reduction.`, "info");
         return;
       }
       const mult = this.getAbilityFlagValue(unit, "turnMeterReductionMultiplier");
       if (mult !== null) {
         effectiveFraction *= mult;
         this.log(
-          `🌋 ${unit.name}'s Molten Immunity reduces Turn Meter reduction by 50%!`,
+          `${unit.name}'s Molten Immunity reduces Turn Meter reduction by 50%.`,
           "info"
         );
       }
     }
 
     if (effectiveFraction > 0 && this.statusManager.hasFlag(unit, "blockBonusTurnMeter")) {
-      this.log(`⛓️ ${unit.name}'s [Seal] prevents bonus Turn Meter gain!`, "status");
+      this.log(`${unit.name}'s [Seal] prevents bonus Turn Meter gain.`, "status");
       return;
     }
 
@@ -373,16 +360,22 @@ export class BattleEngine {
     for (const u of this.getLivingUnits()) {
       if (this.getActiveAbilities(u).some((a) => a.id === "lethal_lava")) {
         u.currentEnergy = Math.min(u.maxEnergy, u.currentEnergy + 5);
-        this.log(`🌋 [${u.name}] Lethal Lava regenerates +5 Energy from Burn damage!`, "info");
+        this.log(`[${u.name}] Lethal Lava regenerates +5 Energy from Burn damage.`, "info");
       }
     }
   }
 
-  applyCalculatedDamage(target, amount, { attacker = null, bypassShieldsAndBlocks = false, sourceLabel = null } = {}) {
+  applyCalculatedDamage(
+    target,
+    amount,
+    { attacker = null, bypassShieldsAndBlocks = false, sourceLabel = null, silentShields = false } = {}
+  ) {
     if (target.currentHp <= 0 || amount <= 0) return 0;
 
     if (!bypassShieldsAndBlocks && this.statusManager.hasFlag(target, "blockDamage")) {
-      this.log(`🛡️ ${target.name}'s [Block Damage] negates all damage!`, "info");
+      if (!silentShields) {
+        this.log(`${target.name}'s [Block Damage] negates incoming damage.`, "info");
+      }
       return 0;
     }
 
@@ -392,10 +385,12 @@ export class BattleEngine {
       const absorbed = Math.min(this.communalShields[target.teamId], remaining);
       this.communalShields[target.teamId] -= absorbed;
       remaining -= absorbed;
-      this.log(
-        `💠 Communal Shield absorbs ${absorbed} damage for ${target.name} (${this.communalShields[target.teamId]} Shield left).`,
-        "info"
-      );
+      if (!silentShields) {
+        this.log(
+          `Communal Shield absorbs ${absorbed} damage for ${target.name} (${this.communalShields[target.teamId]} Shield left).`,
+          "info"
+        );
+      }
       if (remaining <= 0) return 0;
     }
 
@@ -406,7 +401,9 @@ export class BattleEngine {
       if (target.shieldHp <= 0) {
         this.statusManager.removeStatus(target, "shield", { forceProtected: true });
       }
-      this.log(`💠 ${target.name}'s Shield absorbs ${absorbed} damage!`, "info");
+      if (!silentShields) {
+        this.log(`${target.name}'s Shield absorbs ${absorbed} damage.`, "info");
+      }
       if (remaining <= 0) return 0;
     }
 
@@ -423,14 +420,16 @@ export class BattleEngine {
       target.currentHp - actual < 1
     ) {
       actual = Math.max(0, target.currentHp - 1);
-      this.log(`❤️‍🔥 ${target.name}'s [Unkillable] keeps them at 1 HP!`, "info");
+      if (!silentShields) {
+        this.log(`${target.name}'s [Unkillable] keeps them at 1 HP.`, "info");
+      }
     }
 
     target.currentHp -= actual;
     const newHpPct = (target.currentHp / target.effectiveMaxHp) * 100;
 
     if (sourceLabel && actual > 0) {
-      this.log(`💥 ${target.name} takes ${actual} damage from ${sourceLabel}!`, "damage");
+      this.log(`${target.name} takes ${actual} damage from ${sourceLabel}.`, "damage");
     }
 
     if (target.templateId === "first_genius_zander" && actual > 0) {
@@ -467,7 +466,7 @@ export class BattleEngine {
           this.communalShields[enemyTeamId] =
             (this.communalShields[enemyTeamId] || 0) + shieldGrant;
           this.log(
-            `✨ [${theridine.name}] Charging Bar broken (${theridine.customCounters.chargingBarsRemaining}/7 left)! Heroes gain +${shieldGrant} Communal Shield!`,
+            `[${theridine.name}] Charging Bar broken (${theridine.customCounters.chargingBarsRemaining}/7 left). Heroes gain +${shieldGrant} Communal Shield.`,
             "special"
           );
 
@@ -475,7 +474,7 @@ export class BattleEngine {
             theridine.customCounters.chargingReactionsLeft = 0;
             this.modifyTurnMeter(theridine, -0.5, { bypassImmunity: true });
             this.log(
-              `💥 All 7 Charging Bars broken! [${theridine.name}] exits charging state and has action delayed by 50%!`,
+              `All 7 Charging Bars broken! [${theridine.name}] exits charging state and has action delayed by 50%.`,
               "crit"
             );
           }
@@ -490,7 +489,7 @@ export class BattleEngine {
           if (theridine.customCounters.hpBarsRemaining > 0) {
             theridine.currentHp = theridine.effectiveMaxHp;
             this.log(
-              `👁️‍🗨️ [${theridine.name}] Godspawn HP Bar depleted (${theridine.customCounters.hpBarsRemaining}/16 bars remaining)! Heroes gain +${shieldGrant} Communal Shield!`,
+              `[${theridine.name}] Godspawn HP Bar depleted (${theridine.customCounters.hpBarsRemaining}/16 bars remaining). Heroes gain +${shieldGrant} Communal Shield.`,
               "special"
             );
           } else {
@@ -526,7 +525,7 @@ export class BattleEngine {
           hero.currentHp = Math.min(hero.effectiveMaxHp, hero.currentHp + healAmt);
         });
         this.log(
-          `⏳ [${zander.name}] dropped below ${th}% HP! Genius's Foresight delays Zander's action by 50% and heals all heroes by ${healAmt} HP!`,
+          `[${zander.name}] dropped below ${th}% HP: Genius's Foresight delays Zander's action by 50% and heals all heroes by ${healAmt} HP.`,
           "heal"
         );
       }
@@ -542,7 +541,7 @@ export class BattleEngine {
     zander.customCounters.termination = 8;
     zander.customCounters.evolutionDamageTaken = 0;
     this.log(
-      `⚛️ [${zander.name}] enters EVOLUTION STATE! (SPD: 150, DEF: -50, ATK: 20, Termination Counter = 8)!`,
+      `[${zander.name}] enters EVOLUTION STATE (SPD: 150, DEF: -50, ATK: 20, Termination Counter = 8).`,
       "crit"
     );
   }
@@ -556,7 +555,7 @@ export class BattleEngine {
     zander.customCounters.transmutation = 0;
     zander.customCounters.evolutionDamageTaken = 0;
     this.log(
-      `⏳ [${zander.name}] returns to Base Form! Transmutation Counter reset to 0.`,
+      `[${zander.name}] returns to Base Form. Transmutation Counter reset to 0.`,
       "special"
     );
   }
@@ -571,7 +570,7 @@ export class BattleEngine {
   handleUnitDeath(target, killer) {
     target.currentHp = 0;
     target.turnMeter = 0;
-    this.log(`☠️ ${target.name} has been defeated!`, "crit");
+    this.log(`[DEFEATED] ${target.name} has fallen.`, "crit");
 
     for (const ab of this.getActiveAbilities(target)) {
       if (typeof ab.onDeath === "function") {
@@ -612,26 +611,17 @@ export class BattleEngine {
       this.winnerTeam = "draw";
     } else if (!team2Alive) {
       this.winnerTeam = 1;
-      this.log("🏆 VICTORY! The Strike Force triumphs!", "special");
+      this.log("VICTORY: Team 1 triumphs.", "special");
     } else if (!team1Alive) {
       this.winnerTeam = 2;
-      this.log("💀 DEFEAT! The Raid Boss prevails!", "crit");
+      this.log("DEFEAT: Team 2 prevails.", "crit");
     }
     return this.winnerTeam;
   }
 
-  /**
-   * Builds the full list of moves for `unit`, refreshing from `syncUnitActiveMoves(unit)`
-   * and evaluating all declarative sequencing & prerequisite rules:
-   * - `minOtherSkillsUsed`
-   * - `requiresPreviousSkill`
-   * - `forcesNextSkill` (`unit.forcedNextSkillId`)
-   * - `cannotCastManually`
-   */
   getAvailableMovesForUnit(unit) {
     if (!unit || unit.currentHp <= 0 || unit.isActionlessTotem) return [];
 
-    // Always re-sync activeMoveIds from current form + upgrades so UI is never stale
     this.syncUnitActiveMoves(unit);
 
     const moveIds = [...(unit.activeMoveIds || []), "wait", "rest"];
@@ -648,8 +638,6 @@ export class BattleEngine {
         let lockReason = "";
         const isForcedMove = unit.forcedNextSkillId === moveId;
 
-        // 1. If the unit has a `forcedNextSkillId` (e.g. All Realms Leveled after Glory to All Honorable Dead),
-        // ONLY the forced skill (or Wait/Rest if they need Energy) is allowed!
         if (
           unit.forcedNextSkillId &&
           moveId !== unit.forcedNextSkillId &&
@@ -657,41 +645,35 @@ export class BattleEngine {
         ) {
           const forcedSkill = Registry.getSkill(unit.forcedNextSkillId);
           usable = false;
-          lockReason = `Must use [${forcedSkill?.name || unit.forcedNextSkillId}] next!`;
+          lockReason = `Must use [${forcedSkill?.name || unit.forcedNextSkillId}] next`;
         }
 
-        // 2. Check `cannotCastManually` (e.g. Mode: Evolution, Cyclicity: α Scepter, For One is Holy)
         if (usable && skill.cannotCastManually && !isForcedMove) {
           usable = false;
-          lockReason = "Triggered automatically by ability.";
+          lockReason = "Triggered automatically by ability";
         }
 
-        // 3. Check `requiresPreviousSkill` (e.g. All Realms Leveled requires Glory to All Honorable Dead first;
-        // Fallen Star's Eulogy requires Larval Evolution; Flectere requires Ten Thousand Years Silent)
         if (usable && skill.requiresPreviousSkill && !isForcedMove) {
           if (unit.lastNonUniversalSkillId !== skill.requiresPreviousSkill) {
             const reqSkill = Registry.getSkill(skill.requiresPreviousSkill);
             usable = false;
-            lockReason = `Requires casting [${reqSkill?.name || skill.requiresPreviousSkill}] first.`;
+            lockReason = `Requires [${reqSkill?.name || skill.requiresPreviousSkill}] first`;
           }
         }
 
-        // 4. Check `minOtherSkillsUsed` (e.g. Glory to All Honorable Dead requires 3 other skills used first)
         if (usable && typeof skill.minOtherSkillsUsed === "number") {
           const used = unit.skillsUsedCount || 0;
           if (used < skill.minOtherSkillsUsed) {
             usable = false;
-            lockReason = `Requires ${skill.minOtherSkillsUsed} skills used first (${used}/${skill.minOtherSkillsUsed}).`;
+            lockReason = `Requires ${skill.minOtherSkillsUsed} skills used first (${used}/${skill.minOtherSkillsUsed})`;
           }
         }
 
-        // 5. Cooldown check
         if (usable && cdRemaining > 0) {
           usable = false;
           lockReason = `Cooldown: ${cdRemaining}T`;
         }
 
-        // 6. Custom `canUse` hook
         if (usable && typeof skill.canUse === "function") {
           const check = skill.canUse({ attacker: unit, engine: this });
           if (!check.allowed) {
@@ -700,11 +682,10 @@ export class BattleEngine {
           }
         }
 
-        // 7. Energy check (checked last so prerequisite/sequence reasons are shown clearly first)
         if (usable && unit.currentEnergy < effectiveEnergyCost) {
           usable = false;
           lockReason = isForcedMove
-            ? `Queued Next! Needs ${effectiveEnergyCost} Energy (Use Wait/Rest)`
+            ? `Queued Next — Needs ${effectiveEnergyCost} Energy (Use Wait/Rest)`
             : `Needs ${effectiveEnergyCost} Energy`;
         }
 
@@ -773,14 +754,13 @@ export class BattleEngine {
       }
     }
 
-    // Zander Evolution State: Foresight's Rage Termination Counter
     if (unit.templateId === "first_genius_zander" && unit.form === "evolution") {
       unit.customCounters.termination = Math.max(
         0,
         (unit.customCounters.termination ?? 8) - 1
       );
       this.log(
-        `⚛️ [${unit.name}] Termination Counter ticks down to ${unit.customCounters.termination}/8!`,
+        `[${unit.name}] Termination Counter ticks down to ${unit.customCounters.termination}/8.`,
         "status"
       );
       if (unit.customCounters.termination === 0) {
@@ -788,13 +768,12 @@ export class BattleEngine {
       }
     }
 
-    // Theridine Charging State: does not attack on normal turn while charging
     if (
       unit.templateId === "theridine_great_septimus" &&
       (unit.customCounters.chargingBarsRemaining || 0) > 0
     ) {
       this.log(
-        `✨ [${unit.name}] is charging Im Anfang War die Tat (${unit.customCounters.chargingBarsRemaining} bars left, ${unit.customCounters.chargingReactionsLeft} reactions remaining)...`,
+        `[${unit.name}] is charging Im Anfang War die Tat (${unit.customCounters.chargingBarsRemaining} bars left, ${unit.customCounters.chargingReactionsLeft} reactions remaining).`,
         "info"
       );
       this.statusManager.tickStatuses(unit, "TURN_END");
@@ -824,7 +803,7 @@ export class BattleEngine {
     }
 
     if (shouldSkip) {
-      this.log(`💫 ${unit.name} is incapacitated and skips their turn!`, "status");
+      this.log(`${unit.name} is incapacitated and skips their turn.`, "status");
       this.statusManager.tickStatuses(unit, "TURN_END");
       this.advanceToNextTurn();
     }
@@ -847,7 +826,7 @@ export class BattleEngine {
     });
     this.applyCalculatedDamage(target, damage, {
       attacker,
-      sourceLabel: `${label}${isCrit ? " 💥CRIT" : ""}`,
+      sourceLabel: `${label}${isCrit ? " (CRIT)" : ""}`,
     });
   }
 
@@ -871,13 +850,11 @@ export class BattleEngine {
     const skill = Registry.getSkill(moveId);
     const energySpent = moveInfo.energyCost || 0;
 
-    // Deduct Energy & Set Cooldown
     attacker.currentEnergy = Math.max(0, attacker.currentEnergy - energySpent);
     if (skill.cooldown) {
       attacker.cooldowns[skill.id] = skill.cooldown;
     }
 
-    // Check Zander's Extrapolation: β Link trap
     if (this.statusManager.hasStatus(attacker, "extrapolation_link")) {
       this.statusManager.removeStatus(attacker, "extrapolation_link", {
         forceProtected: true,
@@ -885,10 +862,10 @@ export class BattleEngine {
       if (!skill.isUniversal) {
         const massiveDmg = Math.max(1, Math.floor(attacker.effectiveMaxHp * 0.65));
         this.log(
-          `⚡ ${attacker.name} triggered Zander's [Extrapolation: β Link] by casting [${skill.name}] instead of Wait/Rest!`,
+          `${attacker.name} triggered Zander's [Extrapolation: Beta Link] by casting [${skill.name}] instead of Wait/Rest!`,
           "crit"
         );
-        this.dealTrueDamage(attacker, massiveDmg, "Extrapolation: β Link Backlash");
+        this.dealTrueDamage(attacker, massiveDmg, "Extrapolation: Beta Link Backlash");
         if (attacker.currentHp <= 0) {
           this.advanceToNextTurn();
           return true;
@@ -896,33 +873,28 @@ export class BattleEngine {
       }
     }
 
-    // Declarative Skill Sequencing & Upgrade Tracking (Wait/Rest do not break skill chains!)
     if (!skill.isUniversal) {
       attacker.skillsUsedCount = (attacker.skillsUsedCount || 0) + 1;
       attacker.lastNonUniversalSkillId = skill.id;
 
-      // Clear forcedNextSkillId if this was the forced skill
       if (attacker.forcedNextSkillId === skill.id) {
         attacker.forcedNextSkillId = null;
       }
 
-      // If this skill declaratively forces a follow-up skill (e.g. Glory -> All Realms Leveled)
       if (skill.forcesNextSkill) {
         attacker.forcedNextSkillId = skill.forcesNextSkill;
         const nextSkillDef = Registry.getSkill(skill.forcesNextSkill);
         this.log(
-          `⛓️ [${attacker.name}] next required skill queued: [${nextSkillDef?.name || skill.forcesNextSkill}]!`,
+          `[${attacker.name}] next required skill queued: [${nextSkillDef?.name || skill.forcesNextSkill}].`,
           "special"
         );
       }
 
-      // If this skill declaratively upgrades a skill (e.g. Flectere upgrades Heart of Thorns -> Stars Shall Weep)
       if (skill.upgradesSkill && skill.upgradesSkill.from && skill.upgradesSkill.to) {
         if (!attacker.skillUpgrades) attacker.skillUpgrades = {};
         attacker.skillUpgrades[skill.upgradesSkill.from] = skill.upgradesSkill.to;
       }
 
-      // First Genius, Zander: Genius's Foresight Transmutation Counter
       const enemyZander = this.getLivingEnemiesOf(attacker).find(
         (e) => e.templateId === "first_genius_zander" && e.form === "base"
       );
@@ -930,13 +902,13 @@ export class BattleEngine {
         enemyZander.customCounters.transmutation =
           (enemyZander.customCounters.transmutation || 0) + energySpent;
         this.log(
-          `⏳ [${enemyZander.name}] Transmutation Counter +${energySpent} -> ${enemyZander.customCounters.transmutation}/600.`,
+          `[${enemyZander.name}] Transmutation Counter +${energySpent} -> ${enemyZander.customCounters.transmutation}/600.`,
           "info"
         );
         if (enemyZander.customCounters.transmutation >= 600) {
           enemyZander.customCounters.transmutation = 0;
           this.log(
-            `⚛️ [${enemyZander.name}] Transmutation Counter reached 600! Granted an Instant Turn to activate [Mode: Evolution]!`,
+            `[${enemyZander.name}] Transmutation Counter reached 600: granted an Instant Turn to activate [Mode: Evolution].`,
             "crit"
           );
           this.enterZanderEvolution(enemyZander);
@@ -946,8 +918,6 @@ export class BattleEngine {
     }
 
     this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
-
-    // Re-sync active moves & avatar after skill execution (handles Metamorph, Evolution, Stars Shall Weep upgrade)
     this.syncUnitActiveMoves(attacker);
 
     for (const ab of this.getActiveAbilities(attacker)) {
@@ -957,7 +927,6 @@ export class BattleEngine {
     }
     this.statusManager.tickStatuses(attacker, "TURN_END");
 
-    // Check Theridine's Im Anfang War die Tat immediate post-enemy action
     const enemyTheridine = this.getLivingEnemiesOf(attacker).find(
       (e) =>
         e.templateId === "theridine_great_septimus" &&
@@ -967,13 +936,13 @@ export class BattleEngine {
       enemyTheridine.customCounters.chargingReactionsLeft -= 1;
       const left = enemyTheridine.customCounters.chargingReactionsLeft;
       this.log(
-        `👁️‍🗨️ [${enemyTheridine.name}] reacts after ${attacker.name}'s turn (${7 - left}/7 actions elapsed, ${enemyTheridine.customCounters.chargingBarsRemaining} Charging Bars left)!`,
+        `[${enemyTheridine.name}] reacts after ${attacker.name}'s turn (${7 - left}/7 actions elapsed, ${enemyTheridine.customCounters.chargingBarsRemaining} Charging Bars left).`,
         "special"
       );
       if (left <= 0) {
         enemyTheridine.customCounters.chargingBarsRemaining = 0;
         this.log(
-          `🌟 [${enemyTheridine.name}] completes Im Anfang War die Tat charging and unleashes [FOR ONE IS HOLY]!`,
+          `[${enemyTheridine.name}] completes Im Anfang War die Tat charging and unleashes [FOR ONE IS HOLY]!`,
           "crit"
         );
         this.executeCounterSkill(enemyTheridine, "for_one_is_holy");
@@ -990,6 +959,9 @@ export class BattleEngine {
     return true;
   }
 
+  /**
+   * Executes a skill and condenses multi-hit damage readouts into a single combined line per target.
+   */
   runSkillResolution(attacker, skill, targetId, { isFreeCounter = false } = {}) {
     if (typeof skill.onBeforeSkill === "function") {
       skill.onBeforeSkill({ attacker, engine: this });
@@ -1013,10 +985,6 @@ export class BattleEngine {
     if (typeof skill.execute === "function" && !skill.computeRawHit) {
       skill.execute({ attacker, targets, engine: this });
     } else if (skill.computeRawHit) {
-      if (!isFreeCounter) {
-        this.log(`⚔️ ${attacker.name} uses [${skill.name}]!`, "info");
-      }
-
       const attackedDefendersThisSkill = new Set();
 
       for (const target of targets) {
@@ -1026,7 +994,7 @@ export class BattleEngine {
           const accBonus = this.getEffectiveStats(attacker).accuracyBonus || 0;
           const effectiveAcc = Math.min(100, skill.accuracy + accBonus);
           if (this.rng() * 100 > effectiveAcc) {
-            this.log(`💨 ${attacker.name}'s [${skill.name}] missed ${target.name}!`, "info");
+            this.log(`${attacker.name} [${skill.name}] -> ${target.name}: MISSED.`, "info");
             continue;
           }
         }
@@ -1041,6 +1009,9 @@ export class BattleEngine {
             : skill.hits || 1;
 
         let totalDamageToTarget = 0;
+        let critHitsCount = 0;
+        let maxIgnoredDefPct = 0;
+        const perHitAmounts = [];
 
         const bypassShieldsAndBlocks =
           this.getActiveAbilities(attacker).some((a) => a.id === "lethal_lava") &&
@@ -1066,21 +1037,17 @@ export class BattleEngine {
           const dealt = this.applyCalculatedDamage(target, damage, {
             attacker,
             bypassShieldsAndBlocks,
+            silentShields: hits > 1,
           });
           totalDamageToTarget += dealt;
+          perHitAmounts.push(isCrit ? `${dealt}!` : `${dealt}`);
+          if (isCrit) critHitsCount += 1;
+          if (ignoredDefPct > maxIgnoredDefPct) maxIgnoredDefPct = ignoredDefPct;
           attackedDefendersThisSkill.add(target);
 
           if (this.statusManager.hasFlag(target, "removeOnDamage")) {
             this.statusManager.removeStatus(target, "sleep");
           }
-
-          const critTag = isCrit ? " 💥CRIT!" : "";
-          const ignoreTag = ignoredDefPct > 0 ? ` (Ignored ${ignoredDefPct}% DEF)` : "";
-          const hitTag = hits > 1 ? ` [Hit ${h + 1}/${hits}]` : "";
-          this.log(
-            `🎯 ${attacker.name} -> ${target.name}: ${dealt} DMG${critTag}${ignoreTag}${hitTag}`,
-            isCrit ? "crit" : "damage"
-          );
 
           if (typeof skill.onEachHit === "function") {
             skill.onEachHit({ attacker, target, hitIndex: h, engine: this });
@@ -1092,6 +1059,25 @@ export class BattleEngine {
             }
           }
         }
+
+        // Single condensed log line per target combining all hits:
+        const hitsBreakdown =
+          perHitAmounts.length > 1
+            ? ` (${perHitAmounts.length} hits: ${perHitAmounts.join(" + ")})`
+            : "";
+        const critSummary =
+          critHitsCount > 0
+            ? perHitAmounts.length > 1
+              ? ` [${critHitsCount} CRIT]`
+              : " [CRIT]"
+            : "";
+        const ignoreSummary =
+          maxIgnoredDefPct > 0 ? ` [Ignored ${maxIgnoredDefPct}% DEF]` : "";
+
+        this.log(
+          `${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${hitsBreakdown}${critSummary}${ignoreSummary}`,
+          critHitsCount > 0 ? "crit" : "damage"
+        );
 
         if (totalDamageToTarget > 0) {
           if (typeof skill.onAfterHit === "function") {
@@ -1132,9 +1118,6 @@ export class BattleEngine {
     }
   }
 
-  /**
-   * Smart AI for Bosses & Minions (Respects `forcedNextSkillId`, `minOtherSkillsUsed`, and `requiresPreviousSkill`)
-   */
   computeAiAction(unit) {
     if (!unit || unit.currentHp <= 0) return null;
     const allMoves = this.getAvailableMovesForUnit(unit);
@@ -1146,8 +1129,6 @@ export class BattleEngine {
     const lowestHpTarget = [...enemies].sort((a, b) => a.currentHp - b.currentHp)[0];
     const defaultTarget = hexTarget || lowestHpTarget || enemies[0];
 
-    // 1. If a skill is forced next (e.g. All Realms Leveled after Glory to All Honorable Dead),
-    // cast it immediately if usable, or Rest/Wait to build Energy for it!
     if (unit.forcedNextSkillId) {
       const forcedUsable = usableMoves.find((m) => m.id === unit.forcedNextSkillId);
       if (forcedUsable) {
@@ -1157,8 +1138,6 @@ export class BattleEngine {
       return { actorId: unit.id, moveId: energyMove, targetId: unit.id };
     }
 
-    // 2. If a setup skill (that forces a sequel, like Glory to All Honorable Dead, Larval Evolution, Ten Thousand Years Silent)
-    // is unlocked and usable, prioritize casting it!
     const setupSkills = usableMoves.filter((m) => Boolean(m.forcesNextSkill));
     if (setupSkills.length > 0) {
       return {
@@ -1168,7 +1147,6 @@ export class BattleEngine {
       };
     }
 
-    // 3. Other Boss Signature Moves
     const priorityIds = [
       "im_anfang_war_die_tat",
       "walker_among_graves",

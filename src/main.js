@@ -1,9 +1,5 @@
 /**
- * Main Application & UI Controller
- * Ensures the Command Deck & Inspector Skill Lists ALWAYS refresh and display:
- * - Current Form's moves (e.g. Karnage Base <-> Alternate, Zander Base <-> Evolution, Allekheiros Base -> Awakened)
- * - Sequence & Prerequisite Badges (e.g. "Requires 3 skills first", "Requires Glory to All Honorable Dead first", "⚡ QUEUED NEXT")
- * - Full move list in the Right Sidebar Inspector for any clicked character or boss!
+ * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
 import { initializeGameContent } from "./data/index.js";
@@ -13,90 +9,91 @@ import { P2PNetworkManager } from "./network/P2PNetworkManager.js";
 
 initializeGameContent();
 
-const FIVE_HERO_SQUAD = [
-  { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-  { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-  { characterId: "seraphina_dawn", itemId: "aegis_core" },
-  { characterId: "ignis_drake", itemId: "executioner_lens" },
-  { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
-];
-
-const SIX_HERO_SQUAD = [
-  ...FIVE_HERO_SQUAD,
-  { characterId: "orion_starweaver", itemId: "executioner_lens" },
-];
-
-export const ENCOUNTER_PRESETS = {
-  raid_antikhonor: {
-    label: "👑 Raid: Antikhonor, Broken God (5v1)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [{ characterId: "antikhonor_broken_god" }],
+export const BOSS_ENCOUNTERS = [
+  {
+    id: "raid_antikhonor",
+    bossId: "antikhonor_broken_god",
+    name: "Antikhonor, Broken God",
+    recommended: "5 Characters Recommended",
+    summary: "War Armor (8/12 stacks), Glory, Linked Soul Spears, Destroyed MAX HP.",
+    enemyTeam: [{ characterId: "antikhonor_broken_god" }],
   },
-  raid_ouroboros: {
-    label: "🪲 Raid: Ouroboros, The Swarm (5v1+Spawns)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [
+  {
+    id: "raid_ouroboros",
+    bossId: "ouroboros_the_swarm",
+    name: "Ouroboros, The Swarm",
+    recommended: "5 Characters Recommended",
+    summary: "Brood Queen Swarm Spawns, Evolution Counter (8), Queen's Spawn Vulnerability.",
+    enemyTeam: [
       { characterId: "ouroboros_the_swarm" },
       { characterId: "swarm_spawn" },
       { characterId: "swarm_spawn" },
     ],
   },
-  raid_novok: {
-    label: "⚰️ Raid: Crypt-Keeper Novok (5v3)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [
+  {
+    id: "raid_novok",
+    bossId: "crypt_keeper_novok",
+    name: "Crypt-Keeper Novok",
+    recommended: "5 Characters Recommended",
+    summary: "Gravewalker Revive, Shield-scaling Team-Up, Ally Death 20% True DMG Backlash.",
+    enemyTeam: [
       { characterId: "crypt_keeper_novok" },
       { characterId: "grave_acolyte" },
       { characterId: "grave_acolyte" },
     ],
   },
-  raid_ternax: {
-    label: "🌋 Raid: Ternax Hellfire (5v1)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [{ characterId: "ternax_hellfire" }],
+  {
+    id: "raid_ternax",
+    bossId: "ternax_hellfire",
+    name: "Ternax Hellfire",
+    recommended: "5 Characters Recommended",
+    summary: "Lethal Lava Burn Heal & Energy Regen, Molten Immunity, Hex Defense Bypass.",
+    enemyTeam: [{ characterId: "ternax_hellfire" }],
   },
-  raid_zander: {
-    label: "⏳ Raid: First Genius, Zander (6v1)",
-    team1: SIX_HERO_SQUAD,
-    team2: [{ characterId: "first_genius_zander" }],
+  {
+    id: "raid_zander",
+    bossId: "first_genius_zander",
+    name: "First Genius, Zander",
+    recommended: "6 Characters Recommended",
+    summary: "Transmutation (600) -> Evolution State, Beta-Link 0-Energy Trap, Termination (8).",
+    enemyTeam: [{ characterId: "first_genius_zander" }],
   },
-  raid_allekheiros: {
-    label: "🌌 Raid: Allekheiros, Eternal Guardian (5v1)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [{ characterId: "allekheiros_eternal_guardian" }],
+  {
+    id: "raid_allekheiros",
+    bossId: "allekheiros_eternal_guardian",
+    name: "Allekheiros, Eternal Guardian",
+    recommended: "5 Characters Recommended",
+    summary: "Forever Waiting (-10% DMG per hit), Silent Charging Counter, Stars Shall Weep.",
+    enemyTeam: [{ characterId: "allekheiros_eternal_guardian" }],
   },
-  raid_theridine: {
-    label: "👁️‍🗨️ Raid: Theridine, Great Septimus (5v1 • 16 Bars)",
-    team1: FIVE_HERO_SQUAD,
-    team2: [{ characterId: "theridine_great_septimus" }],
+  {
+    id: "raid_theridine",
+    bossId: "theridine_great_septimus",
+    name: "Theridine, Great Septimus",
+    recommended: "5 Characters Recommended",
+    summary: "Godspawn (50 HP x 16 Bars), Communal Shields, 7-Bar Im Anfang War die Tat.",
+    enemyTeam: [{ characterId: "theridine_great_septimus" }],
   },
-  duel_1v1: {
-    label: "👹 1v1 Duel: Karnage vs Antikhonor",
-    team1: [{ characterId: "karnage_the_anarch", itemId: "anarch_sigil" }],
-    team2: [{ characterId: "antikhonor_broken_god" }],
-  },
-  squad_pvp: {
-    label: "⚔️ 3v3 Tactical Squad PvP",
-    team1: [
-      { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
-      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
-      { characterId: "seraphina_dawn", itemId: "aegis_core" },
-    ],
-    team2: [
-      { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
-      { characterId: "ignis_drake", itemId: "vampiric_chalice" },
-      { characterId: "vexor_nightblade", itemId: "chronos_hourglass" },
-    ],
-  },
-};
+];
 
 class GameApp {
   constructor() {
+    this.currentView = "hub"; // "hub" | "battle"
     this.engine = null;
     this.selectedTargetId = null;
     this.inspectedUnitId = null;
     this.autoBossAi = true;
-    this.battlePreset = "raid_antikhonor";
+
+    // Hub state: player's selected team (up to 6 characters) & selected boss
+    this.selectedTeam = [
+      { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
+      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+      { characterId: "seraphina_dawn", itemId: "aegis_core" },
+      { characterId: "ignis_drake", itemId: "executioner_lens" },
+      { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+    ];
+    this.selectedBossEncounterId = "raid_antikhonor";
+    this.lastEncounterConfig = null;
 
     this.network = new P2PNetworkManager({
       onStatusChange: (text, state) => this.updateNetworkStatusUI(text, state),
@@ -110,6 +107,7 @@ class GameApp {
           this.engine = new BattleEngine({ mode: snapshot.mode, seed: snapshot.seed });
         }
         this.engine.hydrateState(snapshot);
+        this.switchView("battle");
         this.ensureValidSelection({ syncInspectorToActive: true });
         this.renderAll();
       },
@@ -121,26 +119,226 @@ class GameApp {
     });
 
     this.bindStaticEvents();
-    this.startNewBattle(this.battlePreset);
+    this.renderHub();
     this.renderCodexModal();
   }
 
-  startNewBattle(presetKey = this.battlePreset) {
-    this.battlePreset = presetKey;
-    const cfg = ENCOUNTER_PRESETS[presetKey] || ENCOUNTER_PRESETS.raid_antikhonor;
+  switchView(viewName) {
+    this.currentView = viewName;
+    const hubEl = document.getElementById("hub-screen");
+    const battleEl = document.getElementById("battle-screen");
+    const returnHubBtn = document.getElementById("return-hub-btn");
 
-    this.engine = new BattleEngine({
-      mode: presetKey,
-      seed: Date.now(),
-      team1Config: cfg.team1,
-      team2Config: cfg.team2,
-    });
+    if (viewName === "hub") {
+      hubEl?.classList.remove("hidden");
+      battleEl?.classList.add("hidden");
+      returnHubBtn?.classList.add("hidden");
+      this.renderHub();
+    } else {
+      hubEl?.classList.add("hidden");
+      battleEl?.classList.remove("hidden");
+      returnHubBtn?.classList.remove("hidden");
+    }
+  }
 
-    const selectEl = document.getElementById("encounter-select");
-    if (selectEl && selectEl.value !== presetKey) {
-      selectEl.value = presetKey;
+  // =========================================================================
+  // HUB & PRE-BATTLE TEAM BUILDER
+  // =========================================================================
+  renderHub() {
+    this.renderSelectedTeamSlots();
+    this.renderCharacterPool();
+    this.renderBossSelectionGrid();
+  }
+
+  renderSelectedTeamSlots() {
+    const container = document.getElementById("selected-team-slots");
+    const countLabel = document.getElementById("team-count-label");
+    if (!container) return;
+
+    if (countLabel) {
+      countLabel.textContent = String(this.selectedTeam.length);
     }
 
+    const allItems = Registry.getAllItems();
+
+    if (this.selectedTeam.length === 0) {
+      container.innerHTML = `<div class="empty-team-msg">No characters selected. Click characters below to add up to 6 members to your team.</div>`;
+      return;
+    }
+
+    container.innerHTML = this.selectedTeam
+      .map((slot, idx) => {
+        const charDef = Registry.getCharacter(slot.characterId);
+        if (!charDef) return "";
+        const itemOptions = allItems
+          .map(
+            (it) =>
+              `<option value="${it.id}" ${it.id === slot.itemId ? "selected" : ""}>Item: ${it.name}</option>`
+          )
+          .join("");
+
+        return `
+          <div class="team-slot-card">
+            <div class="slot-top">
+              <span class="unit-code-badge">${charDef.avatar}</span>
+              <div class="slot-info">
+                <strong>${idx + 1}. ${charDef.name}</strong>
+                <small>${charDef.types.join(" / ")} • HP ${charDef.stats.hp} • SPD ${charDef.stats.spd}</small>
+              </div>
+              <button type="button" class="slot-remove-btn" data-remove-idx="${idx}" title="Remove from team">Remove</button>
+            </div>
+            <select class="slot-item-select" data-slot-idx="${idx}">
+              ${itemOptions}
+            </select>
+          </div>
+        `;
+      })
+      .join("");
+
+    container.querySelectorAll("[data-remove-idx]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.removeIdx);
+        this.selectedTeam.splice(idx, 1);
+        this.renderSelectedTeamSlots();
+      });
+    });
+
+    container.querySelectorAll(".slot-item-select").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const idx = Number(sel.dataset.slotIdx);
+        if (this.selectedTeam[idx]) {
+          this.selectedTeam[idx].itemId = sel.value;
+        }
+      });
+    });
+  }
+
+  renderCharacterPool() {
+    const container = document.getElementById("character-pool-grid");
+    if (!container) return;
+
+    // Allow players to draft any non-minion Hero (or even Bosses!) into their team
+    const playableChars = Registry.getAllCharacters().filter((c) => !c.isMinion);
+
+    container.innerHTML = playableChars
+      .map((c) => {
+        const abilities = (c.abilityIds || [])
+          .map((id) => Registry.getAbility(id)?.name)
+          .filter(Boolean)
+          .join(", ");
+        const isFull = this.selectedTeam.length >= 6;
+
+        return `
+          <div class="pool-char-card ${c.isBoss ? "pool-boss" : ""}">
+            <div class="pool-card-head">
+              <span class="unit-code-badge">${c.avatar}</span>
+              <div>
+                <h4>${c.name}</h4>
+                <small>${c.role} • ${c.types.join("/")}</small>
+              </div>
+            </div>
+            <div class="pool-stats">
+              HP ${c.stats.hp} | EN ${c.stats.energy} | ATK ${c.stats.atk} | DEF ${c.stats.def}% | SPD ${c.stats.spd}
+            </div>
+            <div class="pool-abilities">Passive: ${abilities || "None"}</div>
+            <button type="button" class="action-btn add-char-btn" data-char-id="${c.id}" ${isFull ? "disabled" : ""}>
+              ${isFull ? "Team Full (6/6)" : "+ Add to Team"}
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+
+    container.querySelectorAll(".add-char-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (this.selectedTeam.length >= 6) return;
+        const charId = btn.dataset.charId;
+        const def = Registry.getCharacter(charId);
+        this.selectedTeam.push({
+          characterId: charId,
+          itemId: def?.defaultItemId || "none",
+        });
+        this.renderHub();
+      });
+    });
+  }
+
+  renderBossSelectionGrid() {
+    const container = document.getElementById("boss-selection-grid");
+    if (!container) return;
+
+    container.innerHTML = BOSS_ENCOUNTERS.map((enc) => {
+      const bossDef = Registry.getCharacter(enc.bossId);
+      const isSelected = enc.id === this.selectedBossEncounterId;
+      return `
+        <div class="boss-select-card ${isSelected ? "selected" : ""}" data-enc-id="${enc.id}">
+          <div class="boss-select-top">
+            <span class="unit-code-badge boss">${bossDef?.avatar || "BOSS"}</span>
+            <div>
+              <h4>${enc.name}</h4>
+              <small>${enc.recommended} • HP ${bossDef?.stats.hp} • DEF ${bossDef?.stats.def}% • SPD ${bossDef?.stats.spd}</small>
+            </div>
+          </div>
+          <p class="boss-select-desc">${enc.summary}</p>
+        </div>
+      `;
+    }).join("");
+
+    container.querySelectorAll(".boss-select-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        this.selectedBossEncounterId = card.dataset.encId;
+        this.renderBossSelectionGrid();
+      });
+    });
+  }
+
+  launchBossRaidFromHub() {
+    if (this.selectedTeam.length === 0) {
+      alert("Please add at least 1 character to your team before launching a battle.");
+      return;
+    }
+    const enc =
+      BOSS_ENCOUNTERS.find((e) => e.id === this.selectedBossEncounterId) ||
+      BOSS_ENCOUNTERS[0];
+
+    this.startEncounter({
+      mode: enc.id,
+      team1: [...this.selectedTeam],
+      team2: [...enc.enemyTeam],
+    });
+  }
+
+  launchPvpMatchFromHub() {
+    if (this.selectedTeam.length === 0) {
+      alert("Please add at least 1 character to your team before launching a battle.");
+      return;
+    }
+    // Opponent squad for PvP match
+    const defaultOpponentSquad = [
+      { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
+      { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+      { characterId: "ignis_drake", itemId: "vampiric_chalice" },
+      { characterId: "seraphina_dawn", itemId: "aegis_core" },
+      { characterId: "vexor_nightblade", itemId: "anarch_sigil" },
+    ].slice(0, Math.max(1, this.selectedTeam.length));
+
+    this.startEncounter({
+      mode: "squad_pvp",
+      team1: [...this.selectedTeam],
+      team2: defaultOpponentSquad,
+    });
+  }
+
+  startEncounter({ mode, team1, team2 }) {
+    this.lastEncounterConfig = { mode, team1, team2 };
+    this.engine = new BattleEngine({
+      mode,
+      seed: Date.now(),
+      team1Config: team1,
+      team2Config: team2,
+    });
+
+    this.switchView("battle");
     this.ensureValidSelection({ syncInspectorToActive: true });
     this.renderAll();
 
@@ -204,7 +402,7 @@ class GameApp {
   }
 
   checkIfAiShouldAct() {
-    if (!this.engine || this.engine.winnerTeam) return;
+    if (!this.engine || this.engine.winnerTeam || this.currentView !== "battle") return;
     if (this.network.role === "client") return;
 
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
@@ -222,37 +420,76 @@ class GameApp {
         if (aiAction) {
           this.handlePlayerAction(aiAction);
         }
-      }, 650);
+      }, 600);
     }
   }
 
   bindStaticEvents() {
-    const selectEl = document.getElementById("encounter-select");
-    if (selectEl) {
-      selectEl.innerHTML = Object.entries(ENCOUNTER_PRESETS)
-        .map(([key, val]) => `<option value="${key}">${val.label}</option>`)
-        .join("");
-      selectEl.addEventListener("change", () => {
-        this.startNewBattle(selectEl.value);
-      });
-    }
+    // Hub Team Preset Buttons
+    document.getElementById("preset-5-heroes-btn")?.addEventListener("click", () => {
+      this.selectedTeam = [
+        { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
+        { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+        { characterId: "seraphina_dawn", itemId: "aegis_core" },
+        { characterId: "ignis_drake", itemId: "executioner_lens" },
+        { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+      ];
+      this.renderHub();
+    });
+
+    document.getElementById("preset-6-heroes-btn")?.addEventListener("click", () => {
+      this.selectedTeam = [
+        { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
+        { characterId: "valkyria_chronos", itemId: "chronos_hourglass" },
+        { characterId: "seraphina_dawn", itemId: "aegis_core" },
+        { characterId: "ignis_drake", itemId: "executioner_lens" },
+        { characterId: "vexor_nightblade", itemId: "vampiric_chalice" },
+        { characterId: "orion_starweaver", itemId: "executioner_lens" },
+      ];
+      this.renderHub();
+    });
+
+    document.getElementById("clear-team-btn")?.addEventListener("click", () => {
+      this.selectedTeam = [];
+      this.renderHub();
+    });
+
+    // Launch Battle Buttons from Hub
+    document.getElementById("launch-boss-raid-btn")?.addEventListener("click", () => {
+      this.launchBossRaidFromHub();
+    });
+
+    document.getElementById("launch-pvp-match-btn")?.addEventListener("click", () => {
+      this.launchPvpMatchFromHub();
+    });
+
+    document.getElementById("return-hub-btn")?.addEventListener("click", () => {
+      this.switchView("hub");
+    });
+
+    document.getElementById("restart-battle-btn")?.addEventListener("click", () => {
+      if (this.lastEncounterConfig) {
+        this.startEncounter(this.lastEncounterConfig);
+      }
+    });
 
     const aiToggle = document.getElementById("toggle-ai-btn");
     if (aiToggle) {
       aiToggle.addEventListener("click", () => {
         this.autoBossAi = !this.autoBossAi;
-        aiToggle.textContent = `🤖 Boss/Enemy AI: ${this.autoBossAi ? "ON" : "MANUAL"}`;
+        aiToggle.textContent = `Enemy AI: ${this.autoBossAi ? "ON" : "MANUAL"}`;
         aiToggle.classList.toggle("active", this.autoBossAi);
-        this.renderAll();
-        this.checkIfAiShouldAct();
+        if (this.currentView === "battle") {
+          this.renderAll();
+          this.checkIfAiShouldAct();
+        }
       });
     }
 
-    document.getElementById("restart-battle-btn")?.addEventListener("click", () => {
-      this.startNewBattle(this.battlePreset);
-    });
-
     document.getElementById("open-webrtc-btn")?.addEventListener("click", () => {
+      document.getElementById("webrtc-modal")?.classList.remove("hidden");
+    });
+    document.getElementById("hub-open-webrtc-btn")?.addEventListener("click", () => {
       document.getElementById("webrtc-modal")?.classList.remove("hidden");
     });
     document.getElementById("close-webrtc-btn")?.addEventListener("click", () => {
@@ -301,7 +538,7 @@ class GameApp {
     const badge = document.getElementById("network-status-badge");
     const modalStatus = document.getElementById("webrtc-modal-status");
     if (badge) {
-      badge.textContent = `📡 ${text}`;
+      badge.textContent = `NET: ${text}`;
       badge.dataset.state = state;
     }
     if (modalStatus) {
@@ -309,8 +546,11 @@ class GameApp {
     }
   }
 
+  // =========================================================================
+  // BATTLE ARENA RENDERING (EMOJI-FREE)
+  // =========================================================================
   renderAll() {
-    if (!this.engine) return;
+    if (!this.engine || this.currentView !== "battle") return;
     this.renderTurnOrderBar();
     this.renderTeamsArena();
     this.renderActionCommandDeck();
@@ -339,7 +579,7 @@ class GameApp {
         const spd = this.engine.getEffectiveStats(u).spd;
         return `
           <div class="tm-chip team-${u.teamId} ${isActive ? "active-turn" : ""}" data-unit-id="${u.id}">
-            <span class="tm-avatar">${u.avatar}</span>
+            <span class="unit-code-badge small">${u.avatar}</span>
             <div class="tm-meta">
               <div class="tm-name">${u.name.split(",")[0]}</div>
               <div class="tm-bar-wrap">
@@ -370,12 +610,12 @@ class GameApp {
     if (team1ShieldEl) {
       const s1 = this.engine.communalShields?.[1] || 0;
       team1ShieldEl.innerHTML =
-        s1 > 0 ? `<span class="communal-shield-pill">💠 Communal Shield: ${s1} HP</span>` : "";
+        s1 > 0 ? `<span class="communal-shield-pill">Communal Shield: ${s1} HP</span>` : "";
     }
     if (team2ShieldEl) {
       const s2 = this.engine.communalShields?.[2] || 0;
       team2ShieldEl.innerHTML =
-        s2 > 0 ? `<span class="communal-shield-pill">💠 Communal Shield: ${s2} HP</span>` : "";
+        s2 > 0 ? `<span class="communal-shield-pill">Communal Shield: ${s2} HP</span>` : "";
     }
 
     const team1Units = this.engine.units.filter((u) => u.teamId === 1);
@@ -410,43 +650,43 @@ class GameApp {
 
     if (unit.templateId === "ouroboros_the_swarm") {
       badges.push(
-        `<span class="mechanic-badge">🧬 Evolution: ${c.evolutionCounter ?? 8}/8</span>`
+        `<span class="mechanic-badge">Evolution: ${c.evolutionCounter ?? 8}/8</span>`
       );
     }
     if (unit.templateId === "first_genius_zander") {
       if (unit.form === "base") {
         badges.push(
-          `<span class="mechanic-badge">⚗️ Transmutation: ${c.transmutation ?? 0}/600</span>`
+          `<span class="mechanic-badge">Transmutation: ${c.transmutation ?? 0}/600</span>`
         );
       } else {
         badges.push(
-          `<span class="mechanic-badge">☄️ Termination: ${c.termination ?? 8}/8 (DMG Taken: ${c.evolutionDamageTaken ?? 0})</span>`
+          `<span class="mechanic-badge">Termination: ${c.termination ?? 8}/8 (DMG Taken: ${c.evolutionDamageTaken ?? 0})</span>`
         );
       }
     }
     if (unit.templateId === "theridine_great_septimus") {
       badges.push(
-        `<span class="mechanic-badge">👁️‍🗨️ Sacred Bars: ${c.hpBarsRemaining ?? 16}/16</span>`
+        `<span class="mechanic-badge">Sacred Bars: ${c.hpBarsRemaining ?? 16}/16</span>`
       );
       if ((c.chargingBarsRemaining || 0) > 0) {
         badges.push(
-          `<span class="mechanic-badge danger">⚡ Charging Bars: ${c.chargingBarsRemaining}/7 (${c.chargingReactionsLeft} turns left)</span>`
+          `<span class="mechanic-badge danger">Charging Bars: ${c.chargingBarsRemaining}/7 (${c.chargingReactionsLeft} turns left)</span>`
         );
       }
     }
     if (unit.templateId === "antikhonor_broken_god") {
       badges.push(
-        `<span class="mechanic-badge">⚔️ Skills Used: ${unit.skillsUsedCount || 0}/3</span>`
+        `<span class="mechanic-badge">Skills Used: ${unit.skillsUsedCount || 0}/3</span>`
       );
     }
     if (unit.forcedNextSkillId) {
       const nextSk = Registry.getSkill(unit.forcedNextSkillId);
       badges.push(
-        `<span class="mechanic-badge danger">⛓️ Next: ${nextSk?.name || unit.forcedNextSkillId}</span>`
+        `<span class="mechanic-badge danger">Next: ${nextSk?.name || unit.forcedNextSkillId}</span>`
       );
     }
     if ((unit.shieldHp || 0) > 0) {
-      badges.push(`<span class="mechanic-badge">💠 Shield: ${unit.shieldHp}</span>`);
+      badges.push(`<span class="mechanic-badge">Shield: ${unit.shieldHp}</span>`);
     }
     return badges.join("");
   }
@@ -467,11 +707,11 @@ class GameApp {
     const statusBadges = unit.statuses
       .map((st) => {
         const stackLabel = st.stacks > 1 ? `x${st.stacks}` : "";
-        const durLabel = st.duration !== null ? `${st.duration}T` : "∞";
-        const lockIcon = st.isProtected ? "🔒" : "";
+        const durLabel = st.duration !== null ? `${st.duration}T` : "INF";
+        const lockLabel = st.isProtected ? " [P]" : "";
         return `
           <span class="status-pill ${st.category}" title="${st.name} (${stackLabel} ${durLabel})">
-            ${st.icon} ${st.name} ${stackLabel ? `<b>${stackLabel}</b>` : ""} <small>${durLabel}${lockIcon}</small>
+            [${st.icon}] ${st.name} ${stackLabel ? `<b>${stackLabel}</b>` : ""} <small>${durLabel}${lockLabel}</small>
           </span>
         `;
       })
@@ -479,9 +719,9 @@ class GameApp {
 
     const stanceBadge =
       unit.stance === "rest"
-        ? `<span class="stance-tag rest">💤 REST (50% DEF)</span>`
+        ? `<span class="stance-tag rest">REST (50% DEF)</span>`
         : unit.stance === "wait"
-        ? `<span class="stance-tag wait">🛡️ WAIT (Full DEF)</span>`
+        ? `<span class="stance-tag wait">WAIT (Full DEF)</span>`
         : "";
 
     const formBadge =
@@ -495,9 +735,9 @@ class GameApp {
       <div class="unit-card ${unit.isBoss ? "boss-card" : ""} ${unit.isSummon ? "summon-card" : ""} ${isActive ? "is-active" : ""} ${isTarget ? "is-target" : ""} ${isInspected ? "is-inspected" : ""} ${isDead ? "is-dead" : ""}" data-unit-id="${unit.id}">
         <div class="unit-card-header">
           <div class="unit-avatar-badge">
-            <span class="avatar-emoji">${unit.avatar}</span>
+            <span class="unit-code-badge ${unit.isBoss ? "boss" : ""}">${unit.avatar}</span>
             ${isActive ? `<span class="turn-indicator">ACTING</span>` : ""}
-            ${isTarget && !isDead ? `<span class="target-reticle">🎯 TARGET</span>` : ""}
+            ${isTarget && !isDead ? `<span class="target-reticle">TARGET</span>` : ""}
           </div>
           <div class="unit-title-block">
             <div class="unit-name-row">
@@ -548,7 +788,7 @@ class GameApp {
             </div>
           </div>
         `
-            : `<div class="totem-note">🔗 Tied Construct — Destroy to deal 5% MAX HP to Antikhonor (${unit.linkedTargetName} deals +100% DMG)</div>`
+            : `<div class="totem-note">Tied Construct — Destroy to deal 5% MAX HP to Antikhonor (${unit.linkedTargetName} deals +100% DMG)</div>`
         }
 
         <div class="status-tray">
@@ -564,8 +804,8 @@ class GameApp {
     if (!deckEl || !actorHeaderEl) return;
 
     if (this.engine.winnerTeam) {
-      actorHeaderEl.innerHTML = `<div class="winner-banner">🏆 Battle Finished — ${
-        this.engine.winnerTeam === 1 ? "Strike Force Triumphs!" : "Raid Boss Reigns Supreme!"
+      actorHeaderEl.innerHTML = `<div class="winner-banner">Battle Finished — ${
+        this.engine.winnerTeam === 1 ? "Strike Force Triumphs" : "Opposing Force Triumphs"
       }</div>`;
       deckEl.innerHTML = "";
       return;
@@ -583,11 +823,11 @@ class GameApp {
 
     actorHeaderEl.innerHTML = `
       <div class="actor-banner-left">
-        <span class="actor-big-avatar">${activeUnit.avatar}</span>
+        <span class="unit-code-badge large">${activeUnit.avatar}</span>
         <div>
           <h3>${activeUnit.name}'s Turn <small>(${formName})</small></h3>
           <p>
-            Target: <strong>${targetUnit ? `${targetUnit.avatar} ${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong>
+            Target: <strong>${targetUnit ? `${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong>
             • Skills Used: <strong>${activeUnit.skillsUsedCount || 0}</strong>
             • Last Skill: <strong>${lastSkillName}</strong>
           </p>
@@ -608,21 +848,21 @@ class GameApp {
           <button type="button" class="move-btn ${universalClass} ${forcedClass}" data-move-id="${m.id}" ${disabledAttr}>
             <div class="move-btn-top">
               <span class="move-name">
-                ${m.isForcedMove ? "⚡ " : ""}${m.name}
+                ${m.isForcedMove ? "[NEXT] " : ""}${m.name}
               </span>
               <span class="move-badges">
-                ${m.element && m.element !== "None" ? `<span class="elem-tag">${m.element}${m.stab ? " ★STAB" : ""}</span>` : ""}
-                <span class="cost-tag">⚡ ${m.energyCost || 0}</span>
+                ${m.element && m.element !== "None" ? `<span class="elem-tag">${m.element}${m.stab ? " STAB" : ""}</span>` : ""}
+                <span class="cost-tag">EN ${m.energyCost || 0}</span>
               </span>
             </div>
-            <div class="move-formula">${m.formulaText || m.category} ${m.accuracy ? `• 🎯 ${m.accuracy}%` : ""}</div>
+            <div class="move-formula">${m.formulaText || m.category} ${m.accuracy ? `• ACC ${m.accuracy}%` : ""}</div>
             <div class="move-desc">${m.description}</div>
             ${
               m.isForcedMove && m.usable
-                ? `<div class="move-queued-tag">⚡ REQUIRED FOLLOW-UP READY</div>`
+                ? `<div class="move-queued-tag">REQUIRED FOLLOW-UP READY</div>`
                 : ""
             }
-            ${!m.usable ? `<div class="move-lock-reason">🔒 ${m.lockReason}</div>` : ""}
+            ${!m.usable ? `<div class="move-lock-reason">[LOCKED] ${m.lockReason}</div>` : ""}
           </button>
         `;
       })
@@ -659,7 +899,7 @@ class GameApp {
 
     panel.innerHTML = `
       <div class="inspector-header">
-        <span class="inspector-avatar">${unit.avatar}</span>
+        <span class="unit-code-badge">${unit.avatar}</span>
         <div>
           <h4>${unit.name}</h4>
           <small>${unit.title || unit.role} • ${unit.types.join(", ")}</small>
@@ -678,7 +918,7 @@ class GameApp {
       ${
         species
           ? `<div class="inspector-block">
-              <h5>🧬 Species: ${species.name}</h5>
+              <h5>Species: ${species.name}</h5>
               <p>${species.description}</p>
             </div>`
           : ""
@@ -688,7 +928,7 @@ class GameApp {
         .map(
           (ab) => `
         <div class="inspector-block">
-          <h5>✨ Ability: ${ab.name}</h5>
+          <h5>Ability: ${ab.name}</h5>
           <p>${ab.description}</p>
         </div>
       `
@@ -698,7 +938,7 @@ class GameApp {
       ${
         item && item.id !== "none"
           ? `<div class="inspector-block">
-              <h5>🔮 Item: ${item.name}</h5>
+              <h5>Item: ${item.name}</h5>
               <p>${item.description}</p>
             </div>`
           : ""
@@ -707,7 +947,7 @@ class GameApp {
       ${
         moves.length > 0
           ? `<div class="inspector-block">
-              <h5>⚔️ Active Form Skills (${unit.forms?.[unit.form]?.name || unit.form}):</h5>
+              <h5>Active Form Skills (${unit.forms?.[unit.form]?.name || unit.form}):</h5>
               <div class="inspector-skill-list">
                 ${moves
                   .filter((m) => !m.isUniversal)
@@ -716,7 +956,7 @@ class GameApp {
                     <div class="inspector-skill-item ${m.usable ? "ready" : "locked"}">
                       <div class="inspector-skill-head">
                         <strong>${m.name}</strong>
-                        <span>⚡${m.energyCost} • ${m.usable ? "✅ Ready" : `🔒 ${m.lockReason}`}</span>
+                        <span>EN ${m.energyCost} • ${m.usable ? "READY" : `LOCKED: ${m.lockReason}`}</span>
                       </div>
                       <small>${m.formulaText || ""} — ${m.description}</small>
                     </div>
@@ -761,7 +1001,7 @@ class GameApp {
         const species = Registry.getSpecies(c.speciesId);
         return `
           <div class="codex-card">
-            <h3>${c.avatar} ${c.name} <small>(${c.role})</small></h3>
+            <h3>[${c.avatar}] ${c.name} <small>(${c.role})</small></h3>
             <p><strong>Base Stats:</strong> HP ${c.stats.hp} | Energy ${c.stats.energy} | SPD ${c.stats.spd} | DEF ${c.stats.def}% | ATK ${c.stats.atk}</p>
             <p><strong>Species (${species?.name || "None"}):</strong> ${species?.description || ""}</p>
             ${abilities

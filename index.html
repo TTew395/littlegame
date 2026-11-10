@@ -7,94 +7,160 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <!-- TOP NAVIGATION & BOSS ENCOUNTER SELECTOR -->
+  <!-- TOP NAVIGATION BAR -->
   <header class="top-bar">
     <div class="brand">
-      <span class="brand-logo">⚔️</span>
+      <div class="brand-badge">ROA</div>
       <div>
         <h1>Realms of Anarchy</h1>
-        <small>WebRTC P2P Multi-Character Turn-Based Raid & Squad Battler</small>
+        <small>WebRTC P2P Multi-Character Turn-Based Raid &amp; Squad Battler</small>
       </div>
-    </div>
-
-    <div class="mode-switcher">
-      <label for="encounter-select" class="select-label">Encounter:</label>
-      <select id="encounter-select" class="encounter-select"></select>
     </div>
 
     <div class="top-actions">
       <span id="network-status-badge" class="net-badge" data-state="offline">
-        📡 Local / AI Mode
+        NET: Local / AI Mode
       </span>
-      <button id="toggle-ai-btn" class="action-btn active">🤖 Boss/Enemy AI: ON</button>
-      <button id="open-webrtc-btn" class="action-btn highlight">🌐 WebRTC Multiplayer</button>
-      <button id="open-codex-btn" class="action-btn">📖 Character & Boss Codex</button>
-      <button id="restart-battle-btn" class="action-btn">🔄 Reset</button>
+      <button id="return-hub-btn" class="action-btn highlight hidden">Return to Hub</button>
+      <button id="toggle-ai-btn" class="action-btn active">Enemy AI: ON</button>
+      <button id="open-webrtc-btn" class="action-btn">WebRTC P2P Setup</button>
+      <button id="open-codex-btn" class="action-btn">Codex</button>
     </div>
   </header>
 
-  <!-- TURN METER ORDER RIBBON -->
-  <section class="turn-ribbon-bar">
-    <div class="ribbon-title">⚡ Turn Order (1000 TM)</div>
-    <div id="turn-order-ribbon" class="turn-order-ribbon"></div>
-  </section>
-
-  <!-- MAIN BATTLEFIELD & SIDEBAR -->
-  <main class="workspace-grid">
-    <!-- LEFT / CENTER: ARENA + COMMAND DECK -->
-    <div class="battle-column">
-      <div class="arena-grid">
-        <!-- TEAM 1 (HEROES / PLAYER 1) -->
-        <section class="team-zone team-1-zone">
-          <div class="zone-header">
-            <h2>🛡️ Team 1 — Strike Force</h2>
-            <div id="team-1-communal-shield"></div>
-            <span class="zone-hint">Click any unit to inspect</span>
+  <!-- =================================================================== -->
+  <!-- VIEW 1: CENTRAL COMMAND HUB (TEAM BUILDER + BOSS / PVP SELECTION)   -->
+  <!-- =================================================================== -->
+  <main id="hub-screen" class="hub-screen">
+    <div class="hub-grid">
+      <!-- LEFT: TEAM BUILDER -->
+      <section class="hub-panel">
+        <div class="hub-panel-header">
+          <div>
+            <h2>1. Assemble Your Strike Team</h2>
+            <p class="hub-sub">Select up to 6 characters and assign held items before entering battle.</p>
           </div>
-          <div id="team-1-container" class="units-list"></div>
+          <div class="hub-quick-btns">
+            <button id="preset-5-heroes-btn" class="action-btn">Fill 5 Heroes</button>
+            <button id="preset-6-heroes-btn" class="action-btn">Fill 6 Heroes</button>
+            <button id="clear-team-btn" class="action-btn">Clear</button>
+          </div>
+        </div>
+
+        <!-- SELECTED TEAM SLOTS -->
+        <div class="selected-team-box">
+          <div class="selected-team-header">
+            <span>Active Party Roster (<span id="team-count-label">0</span>/6)</span>
+          </div>
+          <div id="selected-team-slots" class="selected-team-slots"></div>
+        </div>
+
+        <!-- AVAILABLE CHARACTER POOL -->
+        <div class="pool-header">Available Characters (Click to Add to Team)</div>
+        <div id="character-pool-grid" class="character-pool-grid"></div>
+      </section>
+
+      <!-- RIGHT: CHOOSE BATTLE MODE (RAID BOSSES OR MULTIPLAYER PVP) -->
+      <div class="hub-right-column">
+        <!-- RAID BOSSES PANEL -->
+        <section class="hub-panel">
+          <div class="hub-panel-header">
+            <div>
+              <h2>2A. Attack Raid Bosses</h2>
+              <p class="hub-sub">Select a Raid Boss encounter and launch with your assembled team.</p>
+            </div>
+          </div>
+          <div id="boss-selection-grid" class="boss-selection-grid"></div>
+          <div class="launch-bar">
+            <button id="launch-boss-raid-btn" class="launch-btn">Launch Selected Boss Raid</button>
+          </div>
         </section>
 
-        <!-- TEAM 2 (RAID BOSS + MINIONS / PLAYER 2) -->
-        <section class="team-zone team-2-zone">
-          <div class="zone-header">
-            <h2>🔥 Team 2 — Raid Boss & Legions</h2>
-            <div id="team-2-communal-shield"></div>
-            <span class="zone-hint">Click an enemy to target 🎯</span>
+        <!-- MULTIPLAYER PVP / DUEL PANEL -->
+        <section class="hub-panel">
+          <div class="hub-panel-header">
+            <div>
+              <h2>2B. Battle Other Players (WebRTC P2P or Local PvP)</h2>
+              <p class="hub-sub">Connect to another player via WebRTC DataChannels or launch a Squad PvP match.</p>
+            </div>
           </div>
-          <div id="team-2-container" class="units-list"></div>
+          <div class="pvp-hub-controls">
+            <button id="hub-open-webrtc-btn" class="action-btn highlight">Open WebRTC Room / SDP Connection</button>
+            <button id="launch-pvp-match-btn" class="launch-btn secondary">Launch Squad PvP Match</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- =================================================================== -->
+  <!-- VIEW 2: BATTLE ARENA VIEW                                           -->
+  <!-- =================================================================== -->
+  <div id="battle-screen" class="battle-screen hidden">
+    <!-- TURN METER ORDER RIBBON -->
+    <section class="turn-ribbon-bar">
+      <div class="ribbon-title">Turn Order (1000 TM)</div>
+      <div id="turn-order-ribbon" class="turn-order-ribbon"></div>
+      <button id="restart-battle-btn" class="action-btn">Restart Encounter</button>
+    </section>
+
+    <!-- MAIN BATTLEFIELD & SIDEBAR -->
+    <main class="workspace-grid">
+      <!-- LEFT / CENTER: ARENA + COMMAND DECK -->
+      <div class="battle-column">
+        <div class="arena-grid">
+          <!-- TEAM 1 (HEROES / PLAYER 1) -->
+          <section class="team-zone team-1-zone">
+            <div class="zone-header">
+              <h2>Team 1 — Strike Force</h2>
+              <div id="team-1-communal-shield"></div>
+              <span class="zone-hint">Click any unit to inspect</span>
+            </div>
+            <div id="team-1-container" class="units-list"></div>
+          </section>
+
+          <!-- TEAM 2 (RAID BOSS + MINIONS / PLAYER 2) -->
+          <section class="team-zone team-2-zone">
+            <div class="zone-header">
+              <h2>Team 2 — Opposing Force</h2>
+              <div id="team-2-communal-shield"></div>
+              <span class="zone-hint">Click an enemy to target</span>
+            </div>
+            <div id="team-2-container" class="units-list"></div>
+          </section>
+        </div>
+
+        <!-- ACTION COMMAND DECK -->
+        <section class="command-section">
+          <div id="active-actor-banner" class="active-actor-banner"></div>
+          <div id="command-deck" class="command-deck"></div>
         </section>
       </div>
 
-      <!-- ACTION COMMAND DECK -->
-      <section class="command-section">
-        <div id="active-actor-banner" class="active-actor-banner"></div>
-        <div id="command-deck" class="command-deck"></div>
-      </section>
-    </div>
+      <!-- RIGHT SIDEBAR: INSPECTOR + COMBAT LOG -->
+      <aside class="sidebar-column">
+        <section class="inspector-card">
+          <div class="card-title">Unit &amp; Skill Inspector</div>
+          <div id="inspector-content" class="inspector-content"></div>
+        </section>
 
-    <!-- RIGHT SIDEBAR: INSPECTOR + COMBAT LOG -->
-    <aside class="sidebar-column">
-      <section class="inspector-card">
-        <div class="card-title">🔍 Character & Boss Ability Inspector</div>
-        <div id="inspector-content" class="inspector-content"></div>
-      </section>
-
-      <section class="log-card">
-        <div class="card-title">📜 Battle Event Log</div>
-        <div id="combat-log-list" class="combat-log-list"></div>
-      </section>
-    </aside>
-  </main>
+        <section class="log-card">
+          <div class="card-title">Condensed Combat Log</div>
+          <div id="combat-log-list" class="combat-log-list"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
 
   <!-- WEBRTC P2P MULTIPLAYER MODAL -->
   <div id="webrtc-modal" class="modal-backdrop hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>🌐 WebRTC Peer-to-Peer Multiplayer (GitHub Pages)</h2>
-        <button id="close-webrtc-btn" class="close-btn">✕</button>
+        <h2>WebRTC Peer-to-Peer Multiplayer (GitHub Pages)</h2>
+        <button id="close-webrtc-btn" class="close-btn">X</button>
       </div>
       <p class="modal-status" id="webrtc-modal-status">
-        Connect two browsers directly over WebRTC DataChannels. Host controls Team 1; Peer controls Team 2 (or Raid Boss).
+        Connect two browsers directly over WebRTC DataChannels. Host controls Team 1; Peer controls Team 2.
       </p>
 
       <div class="webrtc-split">
@@ -110,9 +176,9 @@
 
         <div class="webrtc-box">
           <h3>Option 2: Zero-Server SDP Token Copy/Paste</h3>
-          <p>1. Host clicks <b>Create Offer</b> & sends token to Peer.<br/>
-             2. Peer pastes token, clicks <b>Create Answer</b> & sends back.<br/>
-             3. Host pastes answer & clicks <b>Complete</b>.</p>
+          <p>1. Host clicks <b>Create Offer</b> &amp; sends token to Peer.<br/>
+             2. Peer pastes token, clicks <b>Create Answer</b> &amp; sends back.<br/>
+             3. Host pastes answer &amp; clicks <b>Complete</b>.</p>
           <textarea id="sdp-token-box" rows="4" placeholder="Paste SDP Offer or Answer token here..." class="text-area"></textarea>
           <div class="btn-row">
             <button id="create-sdp-offer-btn" class="action-btn">1. Create Offer (Host)</button>
@@ -128,8 +194,8 @@
   <div id="codex-modal" class="modal-backdrop hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>📖 Registered Roster & Raid Bosses Codex</h2>
-        <button id="close-codex-btn" class="close-btn">✕</button>
+        <h2>Registered Roster &amp; Raid Bosses Codex</h2>
+        <button id="close-codex-btn" class="close-btn">X</button>
       </div>
       <p class="modal-status">
         All characters, raid bosses, minions, items, skills, species, and statuses are loaded dynamically from <code>src/data/*.js</code>.

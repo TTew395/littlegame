@@ -1,14 +1,5 @@
 /**
- * Passive Abilities Registry
- * Supports all Featured Raid Bosses & Heroes:
- * - Karnage: Avatar of Anarchy
- * - Antikhonor: Master of Legions, Almighty Immunity
- * - Ouroboros & Swarm Spawn: Brood Queen, Queen's Spawn
- * - Crypt-Keeper Novok: Gravewalker
- * - Ternax Hellfire: Lethal Lava, Molten Immunity
- * - First Genius, Zander: Genius's Foresight, Foresight's Rage
- * - Allekheiros, Eternal Guardian: Forever Waiting
- * - Theridine, Great Septimus: Godspawn
+ * Passive Abilities Registry (Emoji-free)
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -87,7 +78,7 @@ export const ABILITY_LIST = [
     onBattleStart({ unit, engine }) {
       engine.statusManager.setStatusStacks(unit, "war_armor", 8, { isProtected: true });
       engine.log(
-        `[${unit.name}] Master of Legions: 8 stacks of War Armor applied!`,
+        `[${unit.name}] Master of Legions: 8 stacks of War Armor applied.`,
         "special"
       );
     },
@@ -109,7 +100,7 @@ export const ABILITY_LIST = [
         engine.statusManager.addStacks(attacker, "glory", 1);
         gloryReduction = engine.statusManager.getStacks(attacker, "glory");
         engine.log(
-          `${attacker.name}'s Glory rises to ${gloryReduction} stack(s)!`,
+          `${attacker.name}'s Glory rises to ${gloryReduction} stack(s).`,
           "status"
         );
       }
@@ -131,7 +122,7 @@ export const ABILITY_LIST = [
           engine.modifyTurnMeter(defender, -0.2, { bypassImmunity: true });
           engine.clearGlobalStatus("glory");
           engine.log(
-            `💥 ${defender.name}'s War Armor SHATTERED! Took ${shatterDmg} damage, action delayed by 20%, and all Glory stacks vanished!`,
+            `[SHATTER] ${defender.name}'s War Armor depleted! Took ${shatterDmg} damage, action delayed by 20%, and all Glory stacks vanished.`,
             "crit"
           );
         }
@@ -175,7 +166,6 @@ export const ABILITY_LIST = [
         const sacrificed = aliveSpawns[0];
         sacrificed.currentHp = 0;
         sacrificed.turnMeter = 0;
-        // Consumed by Ouroboros (does not trigger enemy-kill penalty on allies, or increases Ouroboros ATK by 10%)
         engine.statusManager.applyStatus(unit, unit, "brood_atk_boost", {
           stacks: 1,
           isProtected: true,
@@ -183,7 +173,7 @@ export const ABILITY_LIST = [
         });
         const stacks = engine.statusManager.getStacks(unit, "brood_atk_boost");
         engine.log(
-          `🪲 [${unit.name}] Brood Queen consumes ${sacrificed.name} -> Permanent ATK increased by +${stacks * 10}%!`,
+          `[${unit.name}] Brood Queen consumes ${sacrificed.name} -> Permanent ATK increased by +${stacks * 10}%.`,
           "special"
         );
       }
@@ -200,7 +190,7 @@ export const ABILITY_LIST = [
         defender.customCounters.spawnedThisTurn = true;
         engine.spawnSwarmMinion(defender.teamId);
         engine.log(
-          `🪲 [${defender.name}] Brood Queen spawns a Swarm Spawn in response to the attack!`,
+          `[${defender.name}] Brood Queen spawns a Swarm Spawn in response to the attack.`,
           "special"
         );
       }
@@ -224,14 +214,13 @@ export const ABILITY_LIST = [
           bypassImmunity: true,
         });
 
-        // If ally is Ouroboros, decrement Evolution counter
         if (ally.templateId === "ouroboros_the_swarm" && ally.currentHp > 0) {
           ally.customCounters.evolutionCounter = Math.max(
             0,
             (ally.customCounters.evolutionCounter ?? 8) - 1
           );
           engine.log(
-            `🧬 [${ally.name}] Evolution Counter drops to ${ally.customCounters.evolutionCounter}/8!`,
+            `[${ally.name}] Evolution Counter drops to ${ally.customCounters.evolutionCounter}/8.`,
             "status"
           );
           if (ally.customCounters.evolutionCounter === 0) {
@@ -243,7 +232,7 @@ export const ABILITY_LIST = [
               bypassImmunity: true,
             });
             engine.log(
-              `🐛 [${ally.name}] Evolution Counter reached 0! DEF reduced to 5 for 2 turns, SPD reduced to 60, and counter reset to 8!`,
+              `[MOLT] [${ally.name}] Evolution Counter reached 0! DEF reduced to 5 for 2 turns, SPD reduced to 60, and counter reset to 8.`,
               "crit"
             );
           }
@@ -261,13 +250,12 @@ export const ABILITY_LIST = [
     description:
       "When Novok takes a turn, revives one random dead ally with 30% HP and 50% energy. For each living ally, Novok takes 5% less damage (up to 20%) and deals 10% more damage (up to 40%). Whenever an ally is killed, Novok takes True Damage equal to 20% of their MAX HP.",
     onBattleStart({ unit, engine }) {
-      // Ensure Novok has grave minions if spawned solo in a Raid
       const allies = engine.getLivingAlliesOf(unit).filter((a) => a.id !== unit.id);
       if (allies.length === 0) {
         engine.spawnCharacter("grave_acolyte", unit.teamId);
         engine.spawnCharacter("grave_acolyte", unit.teamId);
         engine.log(
-          `⚰️ [${unit.name}] Gravewalker raises 2 Crypt Acolytes from the catacombs!`,
+          `[${unit.name}] Gravewalker raises 2 Crypt Acolytes from the catacombs.`,
           "special"
         );
       }
@@ -287,7 +275,7 @@ export const ABILITY_LIST = [
         revived.currentEnergy = Math.floor(revived.maxEnergy * 0.5);
         revived.turnMeter = 300;
         engine.log(
-          `⚰️ [${unit.name}] Gravewalker revives ${revived.name} at 30% HP (${revived.currentHp} HP) and 50% Energy!`,
+          `[${unit.name}] Gravewalker revives ${revived.name} at 30% HP (${revived.currentHp} HP) and 50% Energy.`,
           "heal"
         );
       }
@@ -341,7 +329,7 @@ export const ABILITY_LIST = [
       unit.customCounters.evolutionDamageTaken = 0;
       unit.customCounters.hpThresholdsTriggered = {};
       engine.log(
-        `⏳ [${unit.name}] Genius's Foresight records Transmutation Counter (0/600).`,
+        `[${unit.name}] Genius's Foresight records Transmutation Counter (0/600).`,
         "special"
       );
     },
@@ -350,7 +338,7 @@ export const ABILITY_LIST = [
     id: "foresights_rage",
     name: "Foresight's Rage",
     description:
-      "Replaces Transmutation Counter with Termination Counter (set to 8). Decreases by 1 each time Zander takes a turn in Evolution state. At 0, activates Cyclicity: α Scepter and returns Zander to Base Form.",
+      "Replaces Transmutation Counter with Termination Counter (set to 8). Decreases by 1 each time Zander takes a turn in Evolution state. At 0, activates Cyclicity: Alpha Scepter and returns Zander to Base Form.",
   },
 
   // ==========================================
@@ -369,7 +357,6 @@ export const ABILITY_LIST = [
     onAfterSkillAttacked({ attacker, defender, engine }) {
       if (defender.currentHp <= 0) return;
 
-      // If in Charging State (Ten Thousand Years Silent):
       if (engine.statusManager.hasStatus(defender, "silent_charging")) {
         defender.customCounters.chargingCounters = Math.min(
           10,
@@ -377,12 +364,11 @@ export const ABILITY_LIST = [
         );
         const penaltyPct = defender.customCounters.chargingCounters * 5;
         engine.log(
-          `🌌 [${defender.name}] counters from Ten Thousand Years Silent with [Sweep the Field]! (Next Flectere damage reduced by ${penaltyPct}%)`,
+          `[${defender.name}] counters from Ten Thousand Years Silent with [Sweep the Field]! (Next Flectere damage reduced by ${penaltyPct}%)`,
           "special"
         );
         engine.executeCounterSkill(defender, "sweep_the_field");
       } else {
-        // Gain +1 stack of Forever Waiting (-10% damage taken, max 9 stacks = 90%)
         engine.statusManager.applyStatus(
           defender,
           defender,
@@ -407,7 +393,7 @@ export const ABILITY_LIST = [
       unit.customCounters.chargingBarsRemaining = 0;
       unit.customCounters.chargingReactionsLeft = 0;
       engine.log(
-        `✨ [${unit.name}] Godspawn manifests with 16 Sacred Health Bars (50 HP per bar)!`,
+        `[${unit.name}] Godspawn manifests with 16 Sacred Health Bars (50 HP per bar).`,
         "special"
       );
     },

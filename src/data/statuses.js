@@ -1,5 +1,6 @@
 /**
  * Status Effect Definitions (Buffs, Debuffs, Stacking, Non-Stacking, Turn-based & Event-based)
+ * Emoji-free tactical abbreviations.
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -11,7 +12,7 @@ export const STATUS_LIST = [
   {
     id: "block_passive_skills",
     name: "Block Passive Skills",
-    icon: "🔇",
+    icon: "BLK-PAS",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -22,7 +23,7 @@ export const STATUS_LIST = [
   {
     id: "seal",
     name: "Seal",
-    icon: "⛓️",
+    icon: "SEAL",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -33,7 +34,7 @@ export const STATUS_LIST = [
   {
     id: "deathbrand",
     name: "Deathbrand",
-    icon: "💀",
+    icon: "DBRAND",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -44,7 +45,7 @@ export const STATUS_LIST = [
   {
     id: "stun",
     name: "Stun",
-    icon: "💫",
+    icon: "STUN",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -55,7 +56,7 @@ export const STATUS_LIST = [
   {
     id: "sleep",
     name: "Sleep",
-    icon: "💤",
+    icon: "SLEEP",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -66,7 +67,7 @@ export const STATUS_LIST = [
   {
     id: "freeze",
     name: "Freeze",
-    icon: "🧊",
+    icon: "FREEZE",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -78,7 +79,7 @@ export const STATUS_LIST = [
   {
     id: "heart_melt",
     name: "Heart-Melt",
-    icon: "💔",
+    icon: "H-MELT",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -89,7 +90,7 @@ export const STATUS_LIST = [
   {
     id: "def_down",
     name: "Decrease DEF",
-    icon: "🛡️⬇️",
+    icon: "-DEF",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -100,7 +101,7 @@ export const STATUS_LIST = [
   {
     id: "atk_down",
     name: "Decrease ATK",
-    icon: "⚔️⬇️",
+    icon: "-ATK",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -111,7 +112,7 @@ export const STATUS_LIST = [
   {
     id: "spd_down",
     name: "Decrease SPD",
-    icon: "🥾⬇️",
+    icon: "-SPD",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -122,7 +123,7 @@ export const STATUS_LIST = [
   {
     id: "hex",
     name: "Hex",
-    icon: "🔮",
+    icon: "HEX",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -132,14 +133,14 @@ export const STATUS_LIST = [
   },
   {
     id: "extrapolation_link",
-    name: "β-Link Zero Cost",
-    icon: "🧬",
+    name: "Beta-Link Zero Cost",
+    icon: "B-LINK",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
     tickTiming: "TURN_END",
     isProtectedByDefault: true,
-    description: "Energy costs reduced to 0. Using any move besides Rest or Wait triggers massive temporal backlash damage!",
+    description: "Energy costs reduced to 0. Using any move besides Rest or Wait triggers massive temporal backlash damage.",
     flags: { zeroEnergyCost: true },
   },
 
@@ -149,7 +150,7 @@ export const STATUS_LIST = [
   {
     id: "vulnerability",
     name: "Vulnerability",
-    icon: "🎯",
+    icon: "VULN",
     category: "debuff",
     stackBehavior: "stack",
     maxStacks: 20,
@@ -161,7 +162,7 @@ export const STATUS_LIST = [
   {
     id: "bleed",
     name: "Bleed",
-    icon: "🩸",
+    icon: "BLEED",
     category: "debuff",
     stackBehavior: "stack",
     maxStacks: 10,
@@ -171,7 +172,7 @@ export const STATUS_LIST = [
   {
     id: "burn",
     name: "Burn",
-    icon: "🔥",
+    icon: "BURN",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -185,7 +186,7 @@ export const STATUS_LIST = [
   {
     id: "atk_up",
     name: "Increase ATK",
-    icon: "⚔️⬆️",
+    icon: "+ATK",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -196,7 +197,7 @@ export const STATUS_LIST = [
   {
     id: "def_up",
     name: "Increase DEF",
-    icon: "🛡️⬆️",
+    icon: "+DEF",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -207,7 +208,7 @@ export const STATUS_LIST = [
   {
     id: "spd_up",
     name: "Increase SPD",
-    icon: "⚡⬆️",
+    icon: "+SPD",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -218,7 +219,7 @@ export const STATUS_LIST = [
   {
     id: "shield",
     name: "Shield",
-    icon: "💠",
+    icon: "SHIELD",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -228,7 +229,7 @@ export const STATUS_LIST = [
   {
     id: "block_damage",
     name: "Block Damage",
-    icon: "🛡️✨",
+    icon: "BLK-DMG",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -239,7 +240,7 @@ export const STATUS_LIST = [
   {
     id: "unkillable",
     name: "Unkillable",
-    icon: "❤️‍🔥",
+    icon: "UNKILL",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -250,7 +251,7 @@ export const STATUS_LIST = [
   {
     id: "block_debuffs",
     name: "Block Debuffs",
-    icon: "✨",
+    icon: "IMMUNE",
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -265,7 +266,7 @@ export const STATUS_LIST = [
   {
     id: "war_armor",
     name: "War Armor",
-    icon: "🛡️✨",
+    icon: "WAR-ARM",
     category: "buff",
     stackBehavior: "stack",
     maxStacks: 20,
@@ -277,7 +278,7 @@ export const STATUS_LIST = [
   {
     id: "glory",
     name: "Glory",
-    icon: "👑",
+    icon: "GLORY",
     category: "special",
     stackBehavior: "stack",
     maxStacks: 50,
@@ -288,7 +289,7 @@ export const STATUS_LIST = [
   {
     id: "brood_atk_boost",
     name: "Consumed Brood (+10% ATK)",
-    icon: "🪲⬆️",
+    icon: "BROOD+",
     category: "buff",
     stackBehavior: "stack",
     maxStacks: 99,
@@ -299,7 +300,7 @@ export const STATUS_LIST = [
   {
     id: "evolution_vulnerability",
     name: "Molting Shell (DEF=5, SPD=60)",
-    icon: "🐛⬇️",
+    icon: "MOLT",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -310,7 +311,7 @@ export const STATUS_LIST = [
   {
     id: "forever_waiting_guard",
     name: "Forever Waiting (-10% DMG)",
-    icon: "🌌🛡️",
+    icon: "GUARD",
     category: "buff",
     stackBehavior: "stack",
     maxStacks: 9,
@@ -322,7 +323,7 @@ export const STATUS_LIST = [
   {
     id: "silent_charging",
     name: "Ten Thousand Years Silent",
-    icon: "⏳🌌",
+    icon: "CHARGE",
     category: "special",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -334,7 +335,7 @@ export const STATUS_LIST = [
   {
     id: "flectere_exhaustion",
     name: "Exhausted (-100% DEF)",
-    icon: "💔🛡️",
+    icon: "0-DEF",
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
@@ -346,7 +347,7 @@ export const STATUS_LIST = [
   {
     id: "poise_focus",
     name: "Battle Focus",
-    icon: "🎯",
+    icon: "FOCUS",
     category: "buff",
     stackBehavior: "stack",
     maxStacks: 5,

@@ -1,29 +1,18 @@
 /**
- * Character, Boss & Minion Roster Registry
- *
- * Includes:
- * - Heroes: Karnage the Anarch, Valkyria Chronos, Seraphina Dawn, Ignis the Sovereign, Vexor the Nightblade, Orion Starweaver (6th hero for 6-Character Zander Raid!)
- * - Raid Bosses:
- *   1. Antikhonor, Broken God (5 Characters Recommended)
- *   2. Ouroboros, The Swarm + Swarm Spawn (5 Characters Recommended)
- *   3. Crypt-Keeper Novok + Crypt Acolyte (5 Characters Recommended)
- *   4. Ternax Hellfire (5 Characters Recommended)
- *   5. First Genius, Zander [Base & Evolution State] (6 Characters Recommended)
- *   6. Allekheiros, Eternal Guardian (5 Characters Recommended)
- *   7. Theridine, Great Septimus (5 Characters Recommended)
+ * Character, Boss & Minion Roster Registry (Emoji-free)
  */
 
 import { Registry } from "../engine/Registry.js";
 
 export const CHARACTER_LIST = [
   // ==========================================================
-  // HERO ROSTER (Up to 6 Heroes for Raid Battles)
+  // HERO ROSTER (Selectable in Pre-Battle Squad Builder)
   // ==========================================================
   {
     id: "karnage_the_anarch",
     name: "Karnage the Anarch",
     title: "Avatar of Anarchy",
-    avatar: "👹",
+    avatar: "KRN",
     role: "Hero / Multi-Form Striker",
     isBoss: false,
     level: 1,
@@ -46,7 +35,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "👹",
+        avatar: "KRN",
         moves: [
           "sufferslash",
           "anarchic_realm",
@@ -56,7 +45,7 @@ export const CHARACTER_LIST = [
       },
       alternate: {
         name: "Alternate Form",
-        avatar: "👿",
+        avatar: "KRN-A",
         moves: [
           "hellfire",
           "stars_of_destruction",
@@ -70,7 +59,7 @@ export const CHARACTER_LIST = [
     id: "valkyria_chronos",
     name: "Valkyria Chronos",
     title: "Warden of the Rift",
-    avatar: "⚡",
+    avatar: "VLK",
     role: "Hero / Tactician",
     isBoss: false,
     level: 1,
@@ -93,7 +82,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "⚡",
+        avatar: "VLK",
         moves: [
           "chrono_burst",
           "spear_breaker_volley",
@@ -107,7 +96,7 @@ export const CHARACTER_LIST = [
     id: "seraphina_dawn",
     name: "Seraphina Dawn",
     title: "Keeper of the Sacred Flame",
-    avatar: "👼",
+    avatar: "SRP",
     role: "Hero / Healer",
     isBoss: false,
     level: 1,
@@ -130,7 +119,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "👼",
+        avatar: "SRP",
         moves: [
           "sunfire_smite",
           "celestial_aegis",
@@ -144,7 +133,7 @@ export const CHARACTER_LIST = [
     id: "ignis_drake",
     name: "Ignis the Sovereign",
     title: "Wyrm of the Obsidian Star",
-    avatar: "🐉",
+    avatar: "IGN",
     role: "Hero / AoE Nuker",
     isBoss: false,
     level: 1,
@@ -167,7 +156,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "🐉",
+        avatar: "IGN",
         moves: [
           "crimson_rend",
           "draconic_cataclysm",
@@ -181,7 +170,7 @@ export const CHARACTER_LIST = [
     id: "vexor_nightblade",
     name: "Vexor the Nightblade",
     title: "Phantom of the Void",
-    avatar: "🗡️",
+    avatar: "VXR",
     role: "Hero / Assassin",
     isBoss: false,
     level: 1,
@@ -204,7 +193,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "🗡️",
+        avatar: "VXR",
         moves: [
           "crimson_rend",
           "sufferslash",
@@ -218,7 +207,7 @@ export const CHARACTER_LIST = [
     id: "orion_starweaver",
     name: "Orion Starweaver",
     title: "Astral Arbiter",
-    avatar: "🌟",
+    avatar: "ORN",
     role: "Hero / Cosmic Breaker",
     isBoss: false,
     level: 1,
@@ -241,7 +230,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "🌟",
+        avatar: "ORN",
         moves: [
           "spear_breaker_volley",
           "stars_of_destruction",
@@ -259,7 +248,7 @@ export const CHARACTER_LIST = [
     id: "antikhonor_broken_god",
     name: "Antikhonor, Broken God",
     title: "Master of Legions • 5 Characters Recommended",
-    avatar: "👑",
+    avatar: "ANT",
     role: "Raid Boss (Death)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -283,7 +272,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Broken God",
-        avatar: "👑",
+        avatar: "ANT",
         moves: [
           "lance_of_light",
           "pyre_of_high_graves",
@@ -301,7 +290,7 @@ export const CHARACTER_LIST = [
     id: "ouroboros_the_swarm",
     name: "Ouroboros, The Swarm",
     title: "Brood Queen • 5 Characters Recommended",
-    avatar: "🪲",
+    avatar: "OUR",
     role: "Raid Boss (Bug)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -314,10 +303,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["brood_queen", "almighty_immunity"],
     stats: {
-      hp: 400, // 400 HP (1600 eHP with 75% DEF)
+      hp: 400,
       energy: 100,
       spd: 100,
-      def: 75, // -75% damage
+      def: 75,
       atk: 20,
       critRate: 15,
       critDmg: 50,
@@ -325,7 +314,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Hive Queen",
-        avatar: "🪲",
+        avatar: "OUR",
         moves: [
           "swarm_strike_boss",
           "swarm_ensemble_boss",
@@ -339,7 +328,7 @@ export const CHARACTER_LIST = [
     id: "swarm_spawn",
     name: "Swarm Spawn",
     title: "Queen's Brood",
-    avatar: "🐛",
+    avatar: "SPW",
     role: "Swarm Minion",
     isBoss: false,
     isMinion: true,
@@ -352,10 +341,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["queens_spawn"],
     stats: {
-      hp: 20, // 20 HP (22 eHP)
+      hp: 20,
       energy: 100,
       spd: 100,
-      def: 10, // -10% damage
+      def: 10,
       atk: 20,
       critRate: 15,
       critDmg: 50,
@@ -363,7 +352,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Broodling",
-        avatar: "🐛",
+        avatar: "SPW",
         moves: ["swarm_strike_minion", "swarm_ensemble_minion"],
       },
     },
@@ -376,7 +365,7 @@ export const CHARACTER_LIST = [
     id: "crypt_keeper_novok",
     name: "Crypt-Keeper Novok",
     title: "Gravewalker • 5 Characters Recommended",
-    avatar: "⚰️",
+    avatar: "NVK",
     role: "Raid Boss (Death)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -389,10 +378,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["gravewalker", "almighty_immunity"],
     stats: {
-      hp: 300, // 300 HP (316 eHP)
+      hp: 300,
       energy: 100,
       spd: 80,
-      def: 5, // -5% damage
+      def: 5,
       atk: 20,
       critRate: 15,
       critDmg: 50,
@@ -400,7 +389,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Crypt-Keeper",
-        avatar: "⚰️",
+        avatar: "NVK",
         moves: [
           "tombfire",
           "osteomancy",
@@ -414,7 +403,7 @@ export const CHARACTER_LIST = [
     id: "grave_acolyte",
     name: "Crypt Acolyte",
     title: "Risen Legionnaire",
-    avatar: "💀",
+    avatar: "ACL",
     role: "Undead Minion",
     isBoss: false,
     isMinion: true,
@@ -438,7 +427,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Risen",
-        avatar: "💀",
+        avatar: "ACL",
         moves: ["lance_of_light", "wait"],
       },
     },
@@ -451,7 +440,7 @@ export const CHARACTER_LIST = [
     id: "ternax_hellfire",
     name: "Ternax Hellfire",
     title: "Lethal Lava • 5 Characters Recommended",
-    avatar: "🌋",
+    avatar: "TRX",
     role: "Raid Boss (Dragon/Fire)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -464,10 +453,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["lethal_lava", "molten_immunity"],
     stats: {
-      hp: 400, // 400 HP (421 eHP)
+      hp: 400,
       energy: 100,
       spd: 90,
-      def: 5, // -5% damage
+      def: 5,
       atk: 15,
       critRate: 20,
       critDmg: 50,
@@ -475,7 +464,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Hellfire Wyrm",
-        avatar: "🌋",
+        avatar: "TRX",
         moves: ["molten_slag", "magma_pound", "overburn", "hexreaper"],
       },
     },
@@ -488,7 +477,7 @@ export const CHARACTER_LIST = [
     id: "first_genius_zander",
     name: "First Genius, Zander",
     title: "Genius's Foresight • 6 Characters Recommended",
-    avatar: "⏳",
+    avatar: "ZND",
     role: "Raid Boss (Time • 4x 400 HP)",
     isBoss: true,
     recommendedHeroes: 6,
@@ -501,10 +490,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["genius_foresight", "almighty_immunity"],
     stats: {
-      hp: 1600, // 400/400 Health x 4 (2666 eHP)
+      hp: 1600,
       energy: 120,
       spd: 110,
-      def: 40, // -40% damage in Base Form, -50 (+50% damage) in Evolution State
+      def: 40,
       atk: 10,
       critRate: 20,
       critDmg: 50,
@@ -512,7 +501,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Base Form",
-        avatar: "⏳",
+        avatar: "ZND",
         moves: [
           "computation_alpha_set",
           "permutation_gamma",
@@ -522,7 +511,7 @@ export const CHARACTER_LIST = [
       },
       evolution: {
         name: "Evolution State",
-        avatar: "⚛️",
+        avatar: "ZND-E",
         moves: [
           "collapse_delta",
           "restructuring_phi",
@@ -540,7 +529,7 @@ export const CHARACTER_LIST = [
     id: "allekheiros_eternal_guardian",
     name: "Allekheiros, Eternal Guardian",
     title: "Forever Waiting • 5 Characters Recommended",
-    avatar: "🌌",
+    avatar: "ALK",
     role: "Raid Boss (Space)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -553,10 +542,10 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["forever_waiting", "almighty_immunity"],
     stats: {
-      hp: 400, // 400 HP (615 eHP)
+      hp: 400,
       energy: 120,
       spd: 100,
-      def: 35, // -35% damage
+      def: 35,
       atk: 20,
       critRate: 15,
       critDmg: 50,
@@ -564,7 +553,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Eternal Guardian",
-        avatar: "🌌",
+        avatar: "ALK",
         moves: [
           "sweep_the_field",
           "heart_of_thorns",
@@ -574,7 +563,7 @@ export const CHARACTER_LIST = [
       },
       enhanced: {
         name: "Awakened Guardian",
-        avatar: "🌠",
+        avatar: "ALK+",
         moves: [
           "sweep_the_field",
           "stars_shall_weep",
@@ -592,7 +581,7 @@ export const CHARACTER_LIST = [
     id: "theridine_great_septimus",
     name: "Theridine, Great Septimus",
     title: "Godspawn (50 HP x 16 Bars) • 5 Characters Recommended",
-    avatar: "👁️‍🗨️",
+    avatar: "THR",
     role: "Raid Boss (Light)",
     isBoss: true,
     recommendedHeroes: 5,
@@ -605,7 +594,7 @@ export const CHARACTER_LIST = [
     defaultItemId: "none",
     abilityIds: ["godspawn", "almighty_immunity"],
     stats: {
-      hp: 50, // 50/50 Health x 16 Bars (MAX HP considered 50)
+      hp: 50,
       energy: 100,
       spd: 100,
       def: 15,
@@ -616,7 +605,7 @@ export const CHARACTER_LIST = [
     forms: {
       base: {
         name: "Great Septimus",
-        avatar: "👁️‍🗨️",
+        avatar: "THR",
         moves: [
           "as_one_shall_rest",
           "for_one_shall_suffer",

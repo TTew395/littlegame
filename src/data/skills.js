@@ -1,12 +1,5 @@
 /**
- * Skill / Move Definitions Registry
- *
- * Declarative Sequencing & Requirement Fields Supported by the Engine:
- * - `minOtherSkillsUsed`: number (e.g. 3 — requires 3 other non-universal skills used first)
- * - `requiresPreviousSkill`: string skillId (e.g. "glory_to_all_honorable_dead" — can only be cast after casting that prerequisite skill)
- * - `forcesNextSkill`: string skillId (e.g. "all_realms_leveled" — forces the unit to use that skill next; if lacking Energy, AI/Player must Wait/Rest until able)
- * - `upgradesSkill`: { from: "heart_of_thorns", to: "stars_shall_weep" } (declaratively swaps a skill in the unit's active move list)
- * - `cannotCastManually`: boolean (only castable when queued by an ability/counter or `forcesNextSkill`)
+ * Skill / Move Definitions Registry (Emoji-free)
  */
 
 import { Registry } from "../engine/Registry.js";
@@ -33,7 +26,7 @@ export const SKILL_LIST = [
       attacker.currentEnergy = Math.min(attacker.maxEnergy, attacker.currentEnergy + gained);
       attacker.stance = "wait";
       engine.log(
-        `🛡️ ${attacker.name} waits cautiously, keeping full guard up and regaining ${gained} Energy.`,
+        `[WAIT] ${attacker.name} waits cautiously, keeping full guard up and regaining ${gained} Energy.`,
         "info"
       );
     },
@@ -56,7 +49,7 @@ export const SKILL_LIST = [
       attacker.currentEnergy = Math.min(attacker.maxEnergy, attacker.currentEnergy + gained);
       attacker.stance = "rest";
       engine.log(
-        `💤 ${attacker.name} rests deeply, regaining ${gained} Energy (Defense halved until next turn)!`,
+        `[REST] ${attacker.name} rests deeply, regaining ${gained} Energy (Defense halved until next turn).`,
         "status"
       );
     },
@@ -99,7 +92,7 @@ export const SKILL_LIST = [
         if (engine.hasAbilityFlag(target, "immuneToHpSwap")) {
           const capDmg = Math.max(1, Math.floor(target.effectiveMaxHp * 0.1));
           engine.log(
-            `⚡ Anarchic Realm attempts HP Swap, but ${target.name}'s immunity caps max-HP effects to ${capDmg}!`,
+            `[SWAP CAP] Anarchic Realm attempts HP Swap, but ${target.name}'s immunity caps max-HP effects to ${capDmg}.`,
             "special"
           );
           engine.dealTrueDamage(target, capDmg, "Anarchic Realm (Capped Distortion)");
@@ -108,12 +101,12 @@ export const SKILL_LIST = [
           attacker.currentHp = Math.min(attacker.effectiveMaxHp, target.currentHp);
           target.currentHp = Math.min(target.effectiveMaxHp, tempHp);
           engine.log(
-            `🌀 Anarchic Realm warps reality! ${attacker.name} (${attacker.currentHp} HP) swapped HP with ${target.name} (${target.currentHp} HP)!`,
+            `[HP SWAP] Anarchic Realm warps reality: ${attacker.name} (${attacker.currentHp} HP) swapped HP with ${target.name} (${target.currentHp} HP).`,
             "special"
           );
         }
       } else {
-        engine.log(`🌀 Anarchic Realm's HP Swap missed (75% roll)!`, "info");
+        engine.log(`Anarchic Realm's HP Swap missed (75% roll).`, "info");
       }
     },
     computeRawHit({ stats }) {
@@ -167,7 +160,7 @@ export const SKILL_LIST = [
     execute({ attacker, engine }) {
       engine.transformUnitForm(attacker, "alternate");
       engine.log(
-        `🔥 ${attacker.name} unleashes METAMORPH -> Transformed into Alternate Form and granted an Extra Turn!`,
+        `[FORM] ${attacker.name} casts METAMORPH -> Transformed into Alternate Form and granted an Extra Turn.`,
         "special"
       );
       engine.grantExtraTurn(attacker);
@@ -234,7 +227,7 @@ export const SKILL_LIST = [
       if (debuffCount >= 3) {
         target.blockRevive = true;
         engine.log(
-          `⚰️ ${target.name} was slain under 3+ debuffs — [Block Revive] inflicted!`,
+          `[BLOCK REVIVE] ${target.name} was slain under 3+ debuffs — [Block Revive] inflicted.`,
           "crit"
         );
       }
@@ -256,7 +249,7 @@ export const SKILL_LIST = [
     execute({ attacker, engine }) {
       engine.transformUnitForm(attacker, "base");
       engine.log(
-        `⚡ ${attacker.name} casts METAMORPH -> Returned to Base Form and granted an Extra Turn!`,
+        `[FORM] ${attacker.name} casts METAMORPH -> Returned to Base Form and granted an Extra Turn.`,
         "special"
       );
       engine.grantExtraTurn(attacker);
@@ -312,7 +305,6 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "all_enemies",
-    // Declarative sequence rules:
     minOtherSkillsUsed: 3,
     forcesNextSkill: "all_realms_leveled",
     formulaText: "Summons Linked Soul Spears + 12 War Armor + Glory",
@@ -340,7 +332,7 @@ export const SKILL_LIST = [
       engine.recalculateSoulSpearDestruction();
 
       engine.log(
-        `⚔️ ${attacker.name} invokes GLORY TO ALL HONORABLE DEAD! Summoned ${enemies.length} Soul Spear(s), raised War Armor to 12, and bestowed [Glory]!`,
+        `[SUMMON] ${attacker.name} invokes GLORY TO ALL HONORABLE DEAD: summoned ${enemies.length} Soul Spear(s), raised War Armor to 12, and bestowed [Glory].`,
         "special"
       );
     },
@@ -357,7 +349,6 @@ export const SKILL_LIST = [
     undodgeable: true,
     bypassMitigation: true,
     targetType: "all_enemies",
-    // Declarative sequence rule: must be preceded by Glory to All Honorable Dead
     requiresPreviousSkill: "glory_to_all_honorable_dead",
     formulaText: "2 x ATK (+5% per 1% Missing HP, +10% per 1% Destroyed HP, Ignores 100% DEF)",
     description:
@@ -427,7 +418,7 @@ export const SKILL_LIST = [
       if (enemies.length > 0) {
         const lowest = [...enemies].sort((a, b) => a.currentHp - b.currentHp)[0];
         engine.log(
-          `🪲 [${attacker.name}] Swarm Ensemble focuses ${lowest.name} (lowest HP, ignoring 50% DEF)!`,
+          `[${attacker.name}] Swarm Ensemble focuses ${lowest.name} (lowest HP, ignoring 50% DEF).`,
           "special"
         );
         engine.executeBonusHit({
@@ -451,7 +442,6 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "self",
-    // Declarative sequence rule:
     forcesNextSkill: "fallen_stars_eulogy",
     formulaText: "All Swarm Spawns Instant Turn -> Forces Fallen Star's Eulogy",
     description:
@@ -462,7 +452,7 @@ export const SKILL_LIST = [
         .filter((a) => a.templateId === "swarm_spawn");
       spawns.forEach((sp) => engine.grantExtraTurn(sp));
       engine.log(
-        `🪲 [${attacker.name}] casts LARVAL EVOLUTION! ${spawns.length} Swarm Spawn(s) granted an Instant Turn; Fallen Star's Eulogy queued next!`,
+        `[${attacker.name}] casts LARVAL EVOLUTION: ${spawns.length} Swarm Spawn(s) granted an Instant Turn; Fallen Star's Eulogy queued next.`,
         "special"
       );
     },
@@ -478,7 +468,6 @@ export const SKILL_LIST = [
     accuracy: 100,
     undodgeable: true,
     targetType: "all_enemies",
-    // Declarative sequence rule: must be preceded by Larval Evolution
     requiresPreviousSkill: "larval_evolution",
     formulaText: "1.4 x ATK x 3 (+25% DMG per alive Spawn) + Stun + All Spawns Swarm Ensemble",
     description:
@@ -500,7 +489,7 @@ export const SKILL_LIST = [
         .filter((a) => a.templateId === "swarm_spawn");
       if (spawns.length > 0) {
         engine.log(
-          `🪲 [${attacker.name}] teams up with ${spawns.length} Swarm Spawn(s) to unleash Swarm Ensemble!`,
+          `[${attacker.name}] teams up with ${spawns.length} Swarm Spawn(s) to unleash Swarm Ensemble.`,
           "special"
         );
         spawns.forEach((sp) => {
@@ -509,7 +498,6 @@ export const SKILL_LIST = [
       }
     },
   },
-  // Swarm Spawn Minion Moves
   {
     id: "swarm_strike_minion",
     name: "Swarm Strike",
@@ -611,7 +599,7 @@ export const SKILL_LIST = [
         engine.statusManager.applyStatus(attacker, ally, "shield", { duration: 2 });
       });
       engine.log(
-        `💠 [${attacker.name}] casts Fallen's Sheath: granted a ${shieldVal} HP [Shield] to all allies for 2 turns!`,
+        `[${attacker.name}] casts Fallen's Sheath: granted a ${shieldVal} HP [Shield] to all allies for 2 turns.`,
         "heal"
       );
     },
@@ -769,7 +757,7 @@ export const SKILL_LIST = [
     },
     onTargetKilled({ attacker, engine }) {
       engine.log(
-        `🔥 [${attacker.name}] Hexreaper slew its quarry -> Instantly triggers [Magma Pound]!`,
+        `[${attacker.name}] Hexreaper slew its quarry -> Instantly triggers [Magma Pound].`,
         "crit"
       );
       engine.executeCounterSkill(attacker, "magma_pound");
@@ -781,7 +769,7 @@ export const SKILL_LIST = [
   // ==========================================================
   {
     id: "computation_alpha_set",
-    name: "Computation: α Set",
+    name: "Computation: Alpha Set",
     element: "Time",
     category: "Ranged",
     stab: true,
@@ -797,13 +785,13 @@ export const SKILL_LIST = [
     onAfterHit({ target, engine }) {
       if (target.currentHp > 0) {
         target.currentEnergy = Math.min(target.maxEnergy, target.currentEnergy + 15);
-        engine.log(`⚡ ${target.name}'s Energy increased by 15!`, "info");
+        engine.log(`${target.name}'s Energy increased by 15.`, "info");
       }
     },
   },
   {
     id: "permutation_gamma",
-    name: "Permutation: γ",
+    name: "Permutation: Gamma",
     element: "Time",
     category: "Ranged",
     stab: true,
@@ -819,7 +807,7 @@ export const SKILL_LIST = [
   },
   {
     id: "extrapolation_beta_link",
-    name: "Extrapolation: β Link",
+    name: "Extrapolation: Beta Link",
     element: "None",
     category: "Status",
     stab: false,
@@ -842,7 +830,7 @@ export const SKILL_LIST = [
         engine.grantExtraTurn(enemy);
       });
       engine.log(
-        `🧬 [${attacker.name}] casts EXTRAPOLATION: β LINK! All enemies granted an Instant Turn with 0 Energy cost — using any skill besides Wait/Rest triggers temporal annihilation!`,
+        `[${attacker.name}] casts EXTRAPOLATION: BETA LINK: all enemies granted an Instant Turn with 0 Energy cost — using any skill besides Wait/Rest triggers temporal backlash.`,
         "special"
       );
     },
@@ -864,10 +852,9 @@ export const SKILL_LIST = [
       engine.enterZanderEvolution(attacker);
     },
   },
-  // Zander Evolution State Moves
   {
     id: "collapse_delta",
-    name: "Collapse: δ",
+    name: "Collapse: Delta",
     element: "Time",
     category: "Ranged",
     stab: true,
@@ -889,12 +876,12 @@ export const SKILL_LIST = [
           ? Math.max(0, 1 - target.currentEnergy / target.maxEnergy)
           : 0;
       const trueDmg = Math.max(1, Math.round(missingEnergyRatio * atkVal));
-      engine.dealTrueDamage(target, trueDmg, "Collapse: δ (Missing Energy True DMG)");
+      engine.dealTrueDamage(target, trueDmg, "Collapse: Delta (Missing Energy True DMG)");
     },
   },
   {
     id: "restructuring_phi",
-    name: "Restructuring: φ",
+    name: "Restructuring: Phi",
     element: "Time",
     category: "Ranged",
     stab: true,
@@ -915,7 +902,7 @@ export const SKILL_LIST = [
         target.turnMeter = Math.max(0, target.turnMeter - stolenTm);
         attacker.turnMeter += stolenTm;
         engine.log(
-          `⏳ ${attacker.name} steals ${Math.round(stolenTm / 10)}% Turn Meter from ${target.name}!`,
+          `${attacker.name} steals ${Math.round(stolenTm / 10)}% Turn Meter from ${target.name}.`,
           "status"
         );
       }
@@ -923,7 +910,7 @@ export const SKILL_LIST = [
   },
   {
     id: "continuation_gamma",
-    name: "Continuation: Γ",
+    name: "Continuation: Gamma",
     element: "None",
     category: "Ranged",
     stab: false,
@@ -958,7 +945,7 @@ export const SKILL_LIST = [
       });
       if (collectedDebuffs.length > 0) {
         engine.log(
-          `🌀 [${attacker.name}] Continuation: Γ spreads ${collectedDebuffs.length} debuff instance(s) across all enemies!`,
+          `[${attacker.name}] Continuation: Gamma spreads ${collectedDebuffs.length} debuff instance(s) across all enemies.`,
           "status"
         );
       }
@@ -966,7 +953,7 @@ export const SKILL_LIST = [
   },
   {
     id: "cyclicity_alpha_scepter",
-    name: "Cyclicity: α Scepter",
+    name: "Cyclicity: Alpha Scepter",
     element: "None",
     category: "Ranged",
     stab: false,
@@ -1055,7 +1042,7 @@ export const SKILL_LIST = [
       if (totalDamageToTarget > 0 && attacker.currentHp > 0) {
         const heal = Math.max(1, Math.floor(totalDamageToTarget * 0.18));
         attacker.currentHp = Math.min(attacker.effectiveMaxHp, attacker.currentHp + heal);
-        engine.log(`🌌 [${attacker.name}] Stars Shall Weep siphons ${heal} HP!`, "heal");
+        engine.log(`[${attacker.name}] Stars Shall Weep siphons ${heal} HP.`, "heal");
       }
       if (target.currentHp > 0 && engine.rng() <= 0.5) {
         engine.statusManager.applyStatus(attacker, target, "stun", {
@@ -1074,7 +1061,6 @@ export const SKILL_LIST = [
     energyCost: 40,
     accuracy: null,
     targetType: "self",
-    // Declarative sequence rule:
     forcesNextSkill: "flectere_si_nequeno",
     formulaText: "Enter Charging State (ATK -50%, SPD -75%, Counter w/ Sweep the Field)",
     description:
@@ -1085,7 +1071,7 @@ export const SKILL_LIST = [
         isProtected: true,
       });
       engine.log(
-        `🌌 [${attacker.name}] enters TEN THOUSAND YEARS SILENT! Charging Flectere si Nequeno...`,
+        `[${attacker.name}] enters TEN THOUSAND YEARS SILENT: charging Flectere si Nequeno.`,
         "special"
       );
     },
@@ -1101,7 +1087,6 @@ export const SKILL_LIST = [
     accuracy: 100,
     undodgeable: true,
     targetType: "all_enemies",
-    // Declarative sequence & upgrade rules:
     requiresPreviousSkill: "ten_thousand_years_silent",
     upgradesSkill: { from: "heart_of_thorns", to: "stars_shall_weep" },
     formulaText: "(3 x ATK + 0.7 x DEF) x 2 (Hit 1 Ignores DEF, Hit 2 2x vs Lower DEF)",
@@ -1134,7 +1119,7 @@ export const SKILL_LIST = [
       engine.transformUnitForm(attacker, "enhanced");
       if (attacker.customCounters.flectereKilledAny) {
         engine.log(
-          `💥 [${attacker.name}] Flectere si Nequeno claimed a life -> Instantly activates [Stars Shall Weep]!`,
+          `[${attacker.name}] Flectere si Nequeno claimed a life -> Instantly activates [Stars Shall Weep].`,
           "crit"
         );
         engine.executeCounterSkill(attacker, "stars_shall_weep");
@@ -1145,7 +1130,7 @@ export const SKILL_LIST = [
         });
         engine.modifyTurnMeter(attacker, -0.5, { bypassImmunity: true });
         engine.log(
-          `⚠️ [${attacker.name}] Flectere si Nequeno failed to kill a target -> DEF reduced by 100% and action delayed by 50%!`,
+          `[${attacker.name}] Flectere si Nequeno failed to kill a target -> DEF reduced by 100% and action delayed by 50%.`,
           "status"
         );
       }
@@ -1197,7 +1182,7 @@ export const SKILL_LIST = [
       engine.modifyTurnMeter(target, -0.5);
       if (target.currentHp < target.effectiveMaxHp * 0.5) {
         engine.log(
-          `⚡ [${attacker.name}] For One Shall Suffer repeats on ${target.name} (<50% HP) and inflicts [Stun]!`,
+          `[${attacker.name}] For One Shall Suffer repeats on ${target.name} (<50% HP) and inflicts [Stun].`,
           "special"
         );
         engine.executeBonusHit({
@@ -1227,7 +1212,7 @@ export const SKILL_LIST = [
     targetType: "self",
     formulaText: "Requires <50% Total Bars (<=8 bars). Grants 7 Charging Bars + Restores 100% Enemy Energy",
     description:
-      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 charging HP bars (5 HP each) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 bars are broken first!",
+      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 charging HP bars (5 HP each) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 bars are broken first.",
     canUse({ attacker }) {
       const barsLeft = attacker.customCounters.hpBarsRemaining ?? 16;
       const maxBars = attacker.customCounters.maxHpBars ?? 16;
@@ -1246,7 +1231,7 @@ export const SKILL_LIST = [
         enemy.currentEnergy = enemy.maxEnergy;
       });
       engine.log(
-        `✨ [${attacker.name}] invokes IM ANFANG WAR DIE TAT! Gained 7 Sacred Charging Bars and restored 100% Energy to all heroes! Break all 7 bars before 7 enemy actions to stop 'For One is Holy'!`,
+        `[${attacker.name}] invokes IM ANFANG WAR DIE TAT: gained 7 Sacred Charging Bars and restored 100% Energy to all heroes. Break all 7 bars before 7 enemy actions to stop 'For One is Holy'.`,
         "special"
       );
     },
@@ -1265,7 +1250,7 @@ export const SKILL_LIST = [
     targetType: "all_enemies",
     formulaText: "(3 x ATK + 0.1 x ENEMY MAX HP) x 7 (Ignores 100% DEF)",
     description:
-      "Can only be cast once Im Anfang War die Tat charging finishes! Attacks all enemies 7 times, ignoring 100% DEF.",
+      "Can only be cast once Im Anfang War die Tat charging finishes. Attacks all enemies 7 times, ignoring 100% DEF.",
     getIgnoreDefPct() {
       return 1.0;
     },
@@ -1275,7 +1260,7 @@ export const SKILL_LIST = [
   },
 
   // ==========================================================
-  // ADDITIONAL EXPANDABLE HERO SKILLS (For 5-6 Hero Raid Squads)
+  // ADDITIONAL EXPANDABLE HERO SKILLS
   // ==========================================================
   {
     id: "chrono_burst",
@@ -1319,7 +1304,7 @@ export const SKILL_LIST = [
         engine.modifyTurnMeter(ally, 0.2);
       });
       engine.log(
-        `⏳ ${attacker.name} deploys Time Dilation Field: all allies gain [Increase SPD], [Increase ATK], and +20% Turn Meter!`,
+        `${attacker.name} deploys Time Dilation Field: all allies gain [Increase SPD], [Increase ATK], and +20% Turn Meter.`,
         "special"
       );
     },
@@ -1365,7 +1350,7 @@ export const SKILL_LIST = [
         engine.statusManager.applyStatus(attacker, ally, "def_up", { duration: 2 });
       });
       engine.log(
-        `✨ ${attacker.name} invokes Celestial Aegis: healed all allies by 25%, cleansed 1 debuff, and applied [Increase DEF]!`,
+        `${attacker.name} invokes Celestial Aegis: healed all allies by 25%, cleansed 1 debuff, and applied [Increase DEF].`,
         "heal"
       );
     },
