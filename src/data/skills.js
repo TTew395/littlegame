@@ -1171,11 +1171,11 @@ export const SKILL_LIST = [
     energyCost: 30,
     accuracy: 100,
     targetType: "all_enemies",
-    formulaText: "1 x ATK x 3 (Delays Action 50%; <50% HP -> Repeat + [Stun] 1T)",
+    formulaText: "2 x ATK x 3 (Delays Action 50%; <50% HP -> Repeat + [Stun] 1T)",
     description:
       "Attacks all enemies 3 times and delays their action by 50%. Repeats the attack once against enemies under 50% HP and places a [Stun] debuff for 1 turn.",
     computeRawHit({ stats }) {
-      return 1.0 * stats.atk;
+      return 2.0 * stats.atk;
     },
     onAfterHit({ attacker, target, engine }) {
       if (target.currentHp <= 0) return;
@@ -1335,10 +1335,10 @@ export const SKILL_LIST = [
     energyCost: 50,
     accuracy: 80,
     targetType: "all_enemies",
-    formulaText: "1.5 x ATK x 2 (AoE)",
+    formulaText: "1 x ATK x 2 (AoE)",
     description: "Attacks all enemies two times.",
     computeRawHit({ stats }) {
-      return 1.5 * stats.atk;
+      return 1 * stats.atk;
     },
   },
   {
@@ -1699,11 +1699,11 @@ export const SKILL_LIST = [
     accuracy: 100,
     isBasicMove: true,
     targetType: "all_enemies",
-    formulaText: "1.5 x ATK (AoE + 20% Counter on Enemy Extra Turn/Buff)",
+    formulaText: "1 x ATK (AoE + 20% Counter on Enemy Extra Turn/Buff)",
     description:
       "Attacks all enemies. Whenever an enemy gets an Extra Turn, Instant Turn, or receives a buff, Solanar has a 20% chance of counterattacking with this skill.",
     computeRawHit({ stats }) {
-      return 1.5 * stats.atk;
+      return 1 * stats.atk;
     },
   },
   {
@@ -1754,13 +1754,13 @@ export const SKILL_LIST = [
     energyCost: 45,
     accuracy: 80,
     targetType: "single_enemy",
-    formulaText: "2.5 x ATK (Ignores 100% DEF)",
+    formulaText: "2 x ATK (Ignores 100% DEF)",
     description: "Attacks 1 enemy. Will ignore target DEF.",
     getIgnoreDefPct() {
       return 1.0;
     },
     computeRawHit({ stats }) {
-      return 2.5 * stats.atk;
+      return 2 * stats.atk;
     },
   },
   {
