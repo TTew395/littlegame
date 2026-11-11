@@ -455,6 +455,7 @@ export class StatusManager {
           remaining.push(st);
         } else {
           if (st.id === "shield") unit.shieldHp = 0;
+          if (st.id === "magma_shield") unit.magmaShieldHp = 0;
           this.engine.log(`[${st.name}] wore off from ${unit.name}.`, "info", {
             isSkill: false,
           });

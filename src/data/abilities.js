@@ -125,7 +125,7 @@ export const ABILITY_LIST = [
     name: "Scholar of Sun",
     cannotBeBlocked: true,
     description:
-      "Once per battle, if this character is dead, when their last living ally dies, instantly revives this character with 75% HP, 75% energy, and grants an Instant Turn. Whenever a character gets an Extra Turn, Instant Turn, or receives a buff, has a 20% chance of counterattacking with Solar Nova.",
+      "Once per battle, if this character is dead, when their last living ally dies, instantly revives this character with 75% HP, 75% energy, places a [Magma Shield] buff equal to 300% of their MAX HP (reflects 100% damage taken), and grants an Instant Turn. Whenever a character gets an Extra Turn, Instant Turn, or receives a buff, has a 20% chance of counterattacking with Solar Nova.",
     flags: {
       counterOnEnemyExtraTurnOrBuff: true,
       scholarOfSunRevive: true,
@@ -133,7 +133,7 @@ export const ABILITY_LIST = [
     onBattleStart({ unit, engine }) {
       unit.customCounters.scholarOfSunRevived = false;
       engine.log(
-        `[${unit.name}] Scholar of Sun active: will revive at 75% HP & 75% Energy with an Instant Turn when all allies fall, and has a 20% chance to counterattack with [Solar Nova] on buffs/Extra Turns.`,
+        `[${unit.name}] Scholar of Sun active: will revive at 75% HP & 75% Energy with a 300% MAX HP [Magma Shield] and an Instant Turn when all allies fall, and has a 20% chance to counterattack with [Solar Nova] on buffs/Extra Turns.`,
         "special"
       );
     },
@@ -173,9 +173,15 @@ export const ABILITY_LIST = [
         solanar.currentEnergy,
         Math.round(solanar.maxEnergy * 0.75)
       );
+      const magmaShieldVal = Math.round(solanar.effectiveMaxHp * 3.0);
+      solanar.magmaShieldHp = (solanar.magmaShieldHp || 0) + magmaShieldVal;
+      engine.statusManager.applyStatus(solanar, solanar, "magma_shield", {
+        duration: 3,
+        isProtected: true,
+      });
       solanar.turnMeter = 1000;
       engine.log(
-        `[${solanar.name}] Scholar of Sun activates! With all allies fallen, ${solanar.name} revives with ${solanar.currentHp} HP (75% MAX HP), ${solanar.currentEnergy} Energy (75% MAX EN), and an Instant Turn!`,
+        `[${solanar.name}] Scholar of Sun activates! With all allies fallen, ${solanar.name} revives with ${solanar.currentHp} HP (75% MAX HP), ${solanar.currentEnergy} Energy (75% MAX EN), a ${magmaShieldVal} HP [Magma Shield] (100% Reflect), and an Instant Turn!`,
         "special"
       );
       engine.grantExtraTurn(solanar, { suppressReactions: true });
@@ -628,7 +634,7 @@ export const ABILITY_LIST = [
     id: "godspawn",
     name: "Godspawn",
     description:
-      "Theridine has 16 HP bars of 50 HP each (MAX HP per bar is considered 50). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 10x Theridine's ATK (or 20x ATK per 50 HP charging bar broken during Im Anfang War die Tat). Stacks.",
+      "Theridine has 16 HP bars of 50 HP each (MAX HP per bar is considered 50). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 5x Theridine's ATK (or 10x ATK per 50 HP charging bar broken during Im Anfang War die Tat). Stacks.",
     onBattleStart({ unit, engine }) {
       unit.customCounters.hpBarsRemaining = 16;
       unit.customCounters.maxHpBars = 16;

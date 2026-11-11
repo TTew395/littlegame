@@ -426,22 +426,31 @@ class GameApp {
 
   canLocalUserControlUnit(unit) {
     if (!unit) return false;
-    if (this.network.role === "offline") return true;
+    if (this.autoBossAi && unit.teamId === 2) return false;
     if (this.network.role === "host") return unit.teamId === 1;
     if (this.network.role === "client") return unit.teamId === 2;
+    if (this.network.role === "offline") {
+      return this.autoBossAi ? unit.teamId === 1 : true;
+    }
     return true;
   }
 
   handlePlayerAction(action, { fromRemotePeer = false } = {}) {
-    if (!this.engine || this.engine.winnerTeam) return;
+    if (!this.engine || this.engine.winnerTeam || this._isProcessingAction) return;
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
-    if (!activeUnit || activeUnit.id !== action.actorId) return;
+    if (!activeUnit || activeUnit.id !== action.actorId) {
+      console.warn("Mismatched action actor:", action.actorId, "vs active:", activeUnit?.id);
+      this.ensureValidSelection({ syncInspectorToActive: true });
+      this.renderAll();
+      return;
+    }
 
     if (this.network.role === "client" && !fromRemotePeer) {
       this.network.sendActionIntent(action);
       return;
     }
 
+    this._isProcessingAction = true;
     try {
       const executed = this.engine.executeAction(action);
       if (executed) {
@@ -452,11 +461,17 @@ class GameApp {
           this.network.broadcastBattleState(this.engine.serializeState());
         }
         this.checkIfAiShouldAct();
+      } else {
+        console.warn("Battle action was not executed:", action);
+        this.ensureValidSelection({ syncInspectorToActive: true });
+        this.renderAll();
       }
     } catch (err) {
       console.error("Error executing battle action:", err);
       this.ensureValidSelection({ syncInspectorToActive: true });
       this.renderAll();
+    } finally {
+      this._isProcessingAction = false;
     }
   }
 
@@ -771,7 +786,10 @@ class GameApp {
       );
     }
     if ((unit.shieldHp || 0) > 0) {
-      badges.push(`<span class="mechanic-badge">Shield: ${unit.shieldHp}</span>`);
+      badges.push(`<span class="mechanic-badge shield-badge">Shield: ${unit.shieldHp}</span>`);
+    }
+    if ((unit.magmaShieldHp || 0) > 0) {
+      badges.push(`<span class="mechanic-badge magma-badge">Magma Shield: ${unit.magmaShieldHp}</span>`);
     }
     return badges.join("");
   }
@@ -783,6 +801,8 @@ class GameApp {
     const isDead = unit.currentHp <= 0;
 
     const currentHpPct = Math.max(0, (unit.currentHp / unit.baseMaxHp) * 100);
+    const shieldPct = Math.min(100, Math.round(((unit.shieldHp || 0) / unit.baseMaxHp) * 100));
+    const magmaPct = Math.min(100, Math.round(((unit.magmaShieldHp || 0) / unit.baseMaxHp) * 100));
     const destroyedPct = unit.destroyedHpPct || 0;
     const energyPct =
       unit.maxEnergy > 0 ? (unit.currentEnergy / unit.maxEnergy) * 100 : 0;
@@ -794,9 +814,15 @@ class GameApp {
         const stackLabel = st.stacks > 1 ? `x${st.stacks}` : "";
         const durLabel = st.duration !== null ? `${st.duration}T` : "INF";
         const lockLabel = st.isProtected ? " [P]" : "";
+        let valLabel = "";
+        if (st.id === "shield" && (unit.shieldHp || 0) > 0) {
+          valLabel = ` (${unit.shieldHp})`;
+        } else if (st.id === "magma_shield" && (unit.magmaShieldHp || 0) > 0) {
+          valLabel = ` (${unit.magmaShieldHp})`;
+        }
         return `
-          <span class="status-pill ${st.category}" title="${st.name} (${stackLabel} ${durLabel})">
-            [${st.icon}] ${st.name} ${stackLabel ? `<b>${stackLabel}</b>` : ""} <small>${durLabel}${lockLabel}</small>
+          <span class="status-pill ${st.category}" title="${st.name}${valLabel} (${stackLabel} ${durLabel})">
+            [${st.icon}] ${st.name}${valLabel} ${stackLabel ? `<b>${stackLabel}</b>` : ""} <small>${durLabel}${lockLabel}</small>
           </span>
         `;
       })
@@ -844,13 +870,17 @@ class GameApp {
         <div class="bar-group">
           <div class="bar-label">
             <span>HP ${unit.templateId === "theridine_great_septimus" ? `(Bar ${unit.customCounters?.hpBarsRemaining ?? 16}/16)` : ""}</span>
-            <span>
-              ${unit.currentHp} / ${unit.effectiveMaxHp}
+            <span class="hp-values-wrap">
+              <strong>${unit.currentHp}</strong> / ${unit.effectiveMaxHp}
+              ${(unit.shieldHp || 0) > 0 ? `<span class="hp-shield-val">(+${unit.shieldHp} Shield)</span>` : ""}
+              ${(unit.magmaShieldHp || 0) > 0 ? `<span class="hp-magma-val">(+${unit.magmaShieldHp} Magma)</span>` : ""}
               ${destroyedPct > 0 ? `<small class="destroyed-label">(-${destroyedPct}% Destroyed)</small>` : ""}
             </span>
           </div>
           <div class="hp-bar-track">
             <div class="hp-bar-fill" style="width:${currentHpPct}%"></div>
+            ${(unit.shieldHp || 0) > 0 ? `<div class="hp-bar-shield" style="width:${shieldPct}%" title="Shield: ${unit.shieldHp}"></div>` : ""}
+            ${(unit.magmaShieldHp || 0) > 0 ? `<div class="hp-bar-magma" style="width:${magmaPct}%" title="Magma Shield: ${unit.magmaShieldHp}"></div>` : ""}
             ${destroyedPct > 0 ? `<div class="hp-bar-destroyed" style="width:${destroyedPct}%"></div>` : ""}
           </div>
         </div>
@@ -922,11 +952,26 @@ class GameApp {
         </div>
       </div>
       <div class="actor-banner-right">
-        <span class="your-move-pill">Your Move</span>
+        ${
+          canControl
+            ? `<span class="your-move-pill">Your Move</span>`
+            : `<span class="waiting-turn-pill">${activeUnit.name} Acting...</span>`
+        }
       </div>
     `;
 
     deckEl.dataset.activeActorId = activeUnit.id;
+
+    if (!canControl) {
+      deckEl.innerHTML = `
+        <div class="waiting-turn-card">
+          <div class="waiting-turn-title">${activeUnit.name} is taking action...</div>
+          <div class="waiting-turn-sub">Opposing turn in progress. Commands will unlock when it is your move.</div>
+        </div>
+      `;
+      return;
+    }
+
     deckEl.innerHTML = moves
       .map((m) => {
         const disabledAttr = !m.usable || !canControl ? "disabled" : "";
@@ -1001,6 +1046,8 @@ class GameApp {
         <div><span>DEF:</span> <strong>${eff.def}%</strong></div>
         <div><span>SPD:</span> <strong>${eff.spd}</strong></div>
         <div><span>C.DMG:</span> <strong>${eff.critDmg}%</strong></div>
+        ${(unit.shieldHp || 0) > 0 ? `<div><span>Shield:</span> <strong style="color:var(--shield-cyan, #38bdf8)">${unit.shieldHp}</strong></div>` : ""}
+        ${(unit.magmaShieldHp || 0) > 0 ? `<div><span>Magma:</span> <strong style="color:var(--magma-orange, #f97316)">${unit.magmaShieldHp}</strong></div>` : ""}
       </div>
 
       ${

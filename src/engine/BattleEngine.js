@@ -115,6 +115,7 @@ export class BattleEngine {
       effectiveMaxHp: template.stats.hp,
       currentHp: template.stats.hp,
       shieldHp: 0,
+      magmaShieldHp: 0,
 
       maxEnergy: template.stats.energy,
       currentEnergy: template.stats.energy,
@@ -264,6 +265,7 @@ export class BattleEngine {
       effectiveMaxHp: spearMaxHp,
       currentHp: spearMaxHp,
       shieldHp: 0,
+      magmaShieldHp: 0,
       maxEnergy: 0,
       currentEnergy: 0,
       baseStats: { atk: 0, def: 0, spd: 0, critRate: 0, critDmg: 0 },
@@ -482,7 +484,7 @@ export class BattleEngine {
             "special"
           );
           this.runSkillResolution(spartan, basicSkill, tgt.id, {
-            isFreeCounter: false,
+            isFreeCounter: true,
             isTeamUp: true,
           });
         }
@@ -605,6 +607,31 @@ export class BattleEngine {
           `Communal Shield absorbs ${absorbed} damage for ${target.name} (${this.communalShields[target.teamId]} Shield left).`,
           "info",
           { isSkill: false }
+        );
+      }
+      if (remaining <= 0) return 0;
+    }
+
+    if (!skipShields && (target.magmaShieldHp || 0) > 0 && remaining > 0) {
+      const absorbedMagma = Math.min(target.magmaShieldHp, remaining);
+      target.magmaShieldHp -= absorbedMagma;
+      remaining -= absorbedMagma;
+      if (typeof target._absorbedByShieldThisSkill === "number") {
+        target._absorbedByShieldThisSkill += absorbedMagma;
+      }
+      if (target.magmaShieldHp <= 0) {
+        this.statusManager.removeStatus(target, "magma_shield", { forceProtected: true });
+      }
+      this.log(
+        `${target.name}'s Magma Shield absorbs ${absorbedMagma} damage (${target.magmaShieldHp} Magma Shield left).`,
+        "special",
+        { isSkill: false }
+      );
+      if (attacker && attacker.currentHp > 0 && absorbedMagma > 0) {
+        this.dealTrueDamage(
+          attacker,
+          absorbedMagma,
+          `${target.name}'s Magma Shield Reflect (100%)`
         );
       }
       if (remaining <= 0) return 0;
@@ -812,7 +839,7 @@ export class BattleEngine {
 
         if ((theridine.customCounters.chargingBarsRemaining || 0) > 0) {
           theridine.customCounters.chargingBarsRemaining -= 1;
-          const shieldGrant = Math.round(atkVal * 20);
+          const shieldGrant = Math.round(atkVal * 10);
           this.communalShields[enemyTeamId] =
             (this.communalShields[enemyTeamId] || 0) + shieldGrant;
           this.log(
@@ -832,7 +859,7 @@ export class BattleEngine {
         } else {
           theridine.customCounters.hpBarsRemaining =
             (theridine.customCounters.hpBarsRemaining ?? 16) - 1;
-          const shieldGrant = Math.round(atkVal * 10);
+          const shieldGrant = Math.round(atkVal * 5);
           this.communalShields[enemyTeamId] =
             (this.communalShields[enemyTeamId] || 0) + shieldGrant;
 
@@ -1039,9 +1066,15 @@ export class BattleEngine {
             deadSolanar.currentEnergy,
             Math.round(deadSolanar.maxEnergy * 0.75)
           );
+          const magmaShieldVal = Math.round(deadSolanar.effectiveMaxHp * 3.0);
+          deadSolanar.magmaShieldHp = (deadSolanar.magmaShieldHp || 0) + magmaShieldVal;
+          this.statusManager.applyStatus(deadSolanar, deadSolanar, "magma_shield", {
+            duration: 3,
+            isProtected: true,
+          });
           deadSolanar.turnMeter = 1000;
           this.log(
-            `[${deadSolanar.name}] Scholar of Sun activates! With all allies fallen, ${deadSolanar.name} revives at 75% HP (${deadSolanar.currentHp} HP) and 75% Energy (${deadSolanar.currentEnergy} EN) with an Instant Turn!`,
+            `[${deadSolanar.name}] Scholar of Sun activates! With all allies fallen, ${deadSolanar.name} revives at 75% HP (${deadSolanar.currentHp} HP), 75% Energy (${deadSolanar.currentEnergy} EN), a ${magmaShieldVal} HP [Magma Shield] (100% Reflect), and an Instant Turn!`,
             "special"
           );
           this.grantExtraTurn(deadSolanar, { suppressReactions: true });
@@ -1350,6 +1383,7 @@ export class BattleEngine {
       this.statusManager.tickStatuses(unit, "TURN_END");
       this.checkAndAdvanceRound();
       this.advanceToNextTurn();
+      return;
     }
   }
 
@@ -2044,7 +2078,11 @@ export class BattleEngine {
     this.winnerTeam = snapshot.winnerTeam;
     this.communalShields = snapshot.communalShields || { 1: 0, 2: 0 };
     this.units = snapshot.units || [];
-    this.units.forEach((u) => this.syncUnitActiveMoves(u));
+    this.units.forEach((u) => {
+      u.shieldHp = u.shieldHp || 0;
+      u.magmaShieldHp = u.magmaShieldHp || 0;
+      this.syncUnitActiveMoves(u);
+    });
     this.logs = snapshot.logs || [];
   }
 }
