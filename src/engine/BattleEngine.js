@@ -439,6 +439,59 @@ export class BattleEngine {
     }
   }
 
+  getSpartanAlliesCount(unit) {
+    if (!unit) return 0;
+    const spartanTemplates = ["john_117", "fred_104", "kelly_087", "linda_034"];
+    return this.units.filter(
+      (u) =>
+        u.teamId === unit.teamId &&
+        u.id !== unit.id &&
+        u.currentHp > 0 &&
+        spartanTemplates.includes(u.templateId)
+    ).length;
+  }
+
+  triggerSpartanTeamUp(attacker, primaryTarget) {
+    if (this._inSpartanTeamUp || !attacker || !primaryTarget || primaryTarget.currentHp <= 0) return;
+    const spartanBasicSkills = {
+      john_117: "direct_shot",
+      fred_104: "countermand",
+      kelly_087: "ferocious_onslaught",
+      linda_034: "headshot",
+    };
+    if (!spartanBasicSkills[attacker.templateId]) return;
+
+    const allies = this.getLivingAlliesOf(attacker).filter(
+      (u) => spartanBasicSkills[u.templateId] && u.id !== attacker.id
+    );
+    if (allies.length === 0) return;
+
+    this._inSpartanTeamUp = true;
+    try {
+      for (const spartan of allies) {
+        let tgt = primaryTarget;
+        if (tgt.currentHp <= 0) {
+          tgt = this.getLivingEnemiesOf(spartan)[0];
+          if (!tgt) break;
+        }
+        const basicSkillId = spartanBasicSkills[spartan.templateId];
+        const basicSkill = Registry.getSkill(basicSkillId);
+        if (basicSkill) {
+          this.log(
+            `[Spartan Unity] ${spartan.name} coordinates with ${attacker.name} and joins in with [${basicSkill.name}]!`,
+            "special"
+          );
+          this.runSkillResolution(spartan, basicSkill, tgt.id, {
+            isFreeCounter: false,
+            isTeamUp: true,
+          });
+        }
+      }
+    } finally {
+      this._inSpartanTeamUp = false;
+    }
+  }
+
   triggerBurnTick(unit) {
     if (unit.currentHp <= 0) return;
 
@@ -481,9 +534,54 @@ export class BattleEngine {
       bypassUnkillable = false,
       sourceLabel = null,
       silentShields = false,
+      isRedirectedDamage = false,
     } = {}
   ) {
     if (target.currentHp <= 0 || amount <= 0 || target._justRevivedProtectThisSkill) return 0;
+
+    // John-117 Luck Is On My Side Active: Evade massive damage (>30% MAX HP) + Instant Turn
+    if (
+      !bypassShieldsAndBlocks &&
+      this.hasAbilityFlag(target, "spartanBigHitEvade") &&
+      amount > target.effectiveMaxHp * 0.3 &&
+      (target.customCounters?.luckActiveCooldown || 0) <= 0
+    ) {
+      if (!target.customCounters) target.customCounters = {};
+      target.customCounters.luckActiveCooldown = 3;
+      this.log(
+        `[LUCK IS ON MY SIDE] John-117 evades massive damage (${amount} > 30% MAX HP) and takes an Instant Turn!`,
+        "special"
+      );
+      const spartanCount = this.getSpartanAlliesCount(target);
+      if (spartanCount >= 1) {
+        for (const sId in target.cooldowns) {
+          if (target.cooldowns[sId] > 0) target.cooldowns[sId] -= 1;
+        }
+      }
+      if (spartanCount >= 2) {
+        for (const ally of this.getLivingAlliesOf(target)) {
+          this.fillTurnMeter(ally, 250);
+        }
+      }
+      if (spartanCount >= 3) {
+        target.currentHp = target.effectiveMaxHp;
+        this.executeCounterSkill(target, "battle_fire");
+      }
+      this.grantExtraTurn(target);
+      return 0;
+    }
+
+    // Fred-104 Defensive Bulwark Active: Instantly activates Armor Up if receiving damage > 30% MAX HP
+    if (
+      this.hasAbilityFlag(target, "spartanBigHitArmorUp") &&
+      amount > target.effectiveMaxHp * 0.3
+    ) {
+      this.log(
+        `[DEFENSIVE BULWARK] Fred-104 receives damage greater than 30% MAX HP and instantly triggers Armor Up!`,
+        "special"
+      );
+      this.executeCounterSkill(target, "armor_up");
+    }
 
     if (!bypassShieldsAndBlocks && this.statusManager.hasFlag(target, "blockDamage")) {
       if (!silentShields) {
@@ -530,6 +628,48 @@ export class BattleEngine {
       if (remaining <= 0) return 0;
     }
 
+    // Fred-104 Defensive Bulwark: intercepts 25% (or 50% with 1 Spartan Ally) damage for allies
+    if (!isRedirectedDamage && !bypassShieldsAndBlocks && remaining > 0) {
+      const fred = this.getLivingAlliesOf(target).find(
+        (a) => a.id !== target.id && this.hasAbilityFlag(a, "defensiveBulwarkDamageShare")
+      );
+      if (fred) {
+        const spartanCount = this.getSpartanAlliesCount(fred);
+        const sharePct = spartanCount >= 1 ? 0.5 : 0.25;
+        const sharedDmg = Math.floor(remaining * sharePct);
+        if (sharedDmg > 0) {
+          remaining -= sharedDmg;
+          this.log(
+            `[Defensive Bulwark] Fred-104 intercepts ${sharedDmg} damage (${Math.round(sharePct * 100)}%) for ${target.name}!`,
+            "info"
+          );
+          this.applyCalculatedDamage(fred, sharedDmg, {
+            attacker,
+            skill,
+            isRedirectedDamage: true,
+          });
+
+          const fredDefHealPct = spartanCount >= 1 ? 0.45 : 0.2;
+          const fredHealAmt = Math.max(
+            1,
+            Math.floor(this.getEffectiveStats(fred).def * fredDefHealPct)
+          );
+          this.healUnit(fred, fredHealAmt, "Defensive Bulwark Regeneration");
+
+          if (spartanCount >= 2) {
+            const sVal = Math.floor(3.0 * this.getEffectiveStats(fred).def);
+            fred.shieldHp = (fred.shieldHp || 0) + sVal;
+            target.shieldHp = (target.shieldHp || 0) + sVal;
+            this.statusManager.applyStatus(fred, fred, "shield", { duration: 2 });
+            this.statusManager.applyStatus(fred, target, "shield", { duration: 2 });
+          }
+          if (spartanCount >= 3 && attacker && attacker.currentHp > 0) {
+            this.executeCounterSkill(fred, "countermand", attacker.id);
+          }
+        }
+      }
+    }
+
     if (target.templateId === "theridine_great_septimus") {
       return this.applyDamageToTheridine(target, remaining, attacker);
     }
@@ -571,6 +711,63 @@ export class BattleEngine {
 
     if (sourceLabel && actual > 0) {
       this.log(`${target.name} takes ${actual} damage from ${sourceLabel}.`, "damage");
+    }
+
+    // Linda-034 Pinpoint Accuracy Lifesteal (25% damage healed)
+    if (attacker && actual > 0 && this.hasAbilityFlag(attacker, "healOnDamageDealtPct")) {
+      const pct = this.getAbilityFlagValue(attacker, "healOnDamageDealtPct") || 0.25;
+      const lifesteal = Math.max(1, Math.floor(actual * pct));
+      this.healUnit(attacker, lifesteal, `${attacker.name}'s Pinpoint Accuracy Lifesteal`);
+    }
+
+    // Kelly-087 Guarded and Ready: Whenever an ally under a Shield takes damage, heal 50%
+    if (actual > 0 && (target.shieldHp || 0) > 0) {
+      const kelly = this.getLivingAlliesOf(target).find((a) =>
+        this.hasAbilityFlag(a, "guardedReadyShieldEcho")
+      );
+      if (kelly) {
+        const echoHeal = Math.max(1, Math.floor(actual * 0.5));
+        this.healUnit(target, echoHeal, "Guarded and Ready Shield Echo");
+      }
+    }
+
+    // Kelly-087 Active Effect: Ally drops below 50% HP -> cleanses debuffs & grants Stone Skin (1T) (CD: 4)
+    if (
+      oldHpPct >= 50 &&
+      target.currentHp / target.effectiveMaxHp < 0.5 &&
+      target.currentHp > 0
+    ) {
+      const kelly = this.getLivingAlliesOf(target).find(
+        (a) =>
+          this.hasAbilityFlag(a, "guardedReadyEmergencyStoneSkin") &&
+          (a.customCounters?.guardedReadyCooldown || 0) <= 0
+      );
+      if (kelly) {
+        if (!kelly.customCounters) kelly.customCounters = {};
+        kelly.customCounters.guardedReadyCooldown = 4;
+        this.log(
+          `[GUARDED AND READY] ${target.name} fell below 50% HP! Kelly-087 cleanses all debuffs and grants [Stone Skin] (1T)!`,
+          "special"
+        );
+        target.statuses = target.statuses.filter((s) => s.category !== "debuff" || s.isProtected);
+        this.statusManager.applyStatus(kelly, target, "stone_skin", { duration: 1 });
+      }
+
+      // John-117 3 Spartan Allies: Instantly activates Spartans, As One when ally drops below 50% HP
+      const john = this.getLivingAlliesOf(target).find(
+        (a) =>
+          a.templateId === "john_117" &&
+          this.getSpartanAlliesCount(a) >= 3 &&
+          !a._spartansAsOneProcThisTurn
+      );
+      if (john) {
+        john._spartansAsOneProcThisTurn = true;
+        this.log(
+          `[Spartan Unity] Ally emergency (<50% HP)! John-117 instantly unleashes [Spartans, As One]!`,
+          "special"
+        );
+        this.executeCounterSkill(john, "spartans_as_one");
+      }
     }
 
     if (target.currentHp > 0 && actual > 0 && tgtItem && typeof tgtItem.onAfterTakeDamage === "function") {
@@ -1087,6 +1284,19 @@ export class BattleEngine {
       }
     }
 
+    if (!isExtraTurn && unit.customCounters) {
+      if (unit.customCounters.luckActiveCooldown > 0) {
+        unit.customCounters.luckActiveCooldown -= 1;
+      }
+      if (unit.customCounters.guardedReadyCooldown > 0) {
+        unit.customCounters.guardedReadyCooldown -= 1;
+      }
+    }
+
+    for (const u of this.units) {
+      u._spartansAsOneProcThisTurn = false;
+    }
+
     if (unit.templateId === "first_genius_zander" && unit.form === "evolution") {
       unit.customCounters.termination = Math.max(
         0,
@@ -1179,6 +1389,9 @@ export class BattleEngine {
 
   getUnitEvasionChance(unit) {
     let evasion = 0;
+    if (this.hasAbilityFlag(unit, "innateEvadeChance")) {
+      evasion += this.getAbilityFlagValue(unit, "innateEvadeChance") || 0.1;
+    }
     if (this.statusManager.hasStatus(unit, "predator_sprint")) {
       evasion += 0.5;
     }
@@ -1348,7 +1561,12 @@ export class BattleEngine {
   /**
    * Executes a skill and condenses multi-hit damage readouts into a single combined line per target.
    */
-  runSkillResolution(attacker, skill, targetId, { isFreeCounter = false } = {}) {
+  runSkillResolution(
+    attacker,
+    skill,
+    targetId,
+    { isFreeCounter = false, isTeamUp = false } = {}
+  ) {
     if (typeof skill.onBeforeSkill === "function") {
       skill.onBeforeSkill({ attacker, engine: this });
     }
@@ -1662,6 +1880,17 @@ export class BattleEngine {
             });
           }
         }
+
+        if (typeof skill.onAfterAttack === "function") {
+          skill.onAfterAttack({
+            attacker,
+            target,
+            totalDamageToTarget,
+            critHitsCount,
+            engine: this,
+            isRepeat: Boolean(skill._isRepeat),
+          });
+        }
       }
 
       this.recalculateSoulSpearDestruction();
@@ -1708,6 +1937,16 @@ export class BattleEngine {
             }
           }
         }
+      }
+
+      // Spartan Strike Team join-in: When a Spartan attacks or counterattacks, other living Spartans join in with basic skill
+      if (
+        !isTeamUp &&
+        this.hasAbilityFlag(attacker, "spartanTeamUp") &&
+        attackedDefendersThisSkill.size > 0
+      ) {
+        const primaryTarget = [...attackedDefendersThisSkill][0];
+        this.triggerSpartanTeamUp(attacker, primaryTarget);
       }
 
       if (typeof skill.onAfterSkill === "function") {

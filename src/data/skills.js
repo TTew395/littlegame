@@ -2220,6 +2220,495 @@ export const SKILL_LIST = [
       return (1 + missingRatio) * stats.atk;
     },
   },
+
+  // ==========================================================
+  // SPARTAN-II STRIKE FORCE MOVES (JOHN-117, FRED-104, KELLY-087, LINDA-034)
+  // ==========================================================
+  // 1. JOHN-117 MOVES
+  {
+    id: "direct_shot",
+    name: "Direct Shot",
+    element: "Void",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 15,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "1.9 x ATK (x2 hits) • Ignore +5% DEF per hit • Repeat on Crit",
+    description:
+      "Attacks one enemy twice. Will repeat this attack once if any of the hits were critical. Each subsequent hit from this skill will ignore an additional 5% of target DEF.",
+    computeRawHit({ stats }) {
+      return 1.9 * stats.atk;
+    },
+    getIgnoreDefPct({ hitIndex }) {
+      return Math.min(1.0, (hitIndex || 0) * 0.05);
+    },
+    onAfterAttack({ attacker, target, critHitsCount, engine, isRepeat }) {
+      if (critHitsCount > 0 && !isRepeat && target && target.currentHp > 0) {
+        engine.log(
+          `[Direct Shot] Critical hit landed! John-117 immediately repeats Direct Shot!`,
+          "special"
+        );
+        engine.runSkillResolution(
+          attacker,
+          { ...this, hits: 2, _isRepeat: true },
+          target.id,
+          { isFreeCounter: true, isTeamUp: true }
+        );
+      }
+    },
+  },
+  {
+    id: "battle_fire",
+    name: "Battle Fire",
+    element: "Void",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    cooldown: 3,
+    energyCost: 35,
+    accuracy: 95,
+    targetType: "all_enemies",
+    formulaText: "3.8 x ATK (AoE) • [+Shatter] Self (2T) • [-DEF (60%)] & [Weaken (25%)] (2T)",
+    description:
+      "Attacks all enemies. Places a 60% [Decrease DEF] and 25% [Weaken] debuff for 2 turns. Before attacking, places a 15% [Shatter] buff on this Champion for 2 turns.",
+    onBeforeAttack({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "shatter", { duration: 2 });
+    },
+    computeRawHit({ stats }) {
+      return 3.8 * stats.atk;
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) return;
+      engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
+      engine.statusManager.applyStatus(attacker, target, "weaken", { duration: 2 });
+    },
+  },
+  {
+    id: "spartans_as_one",
+    name: "Spartans, As One",
+    element: "Void",
+    category: "Physical",
+    stab: true,
+    hits: 1,
+    cooldown: 4,
+    energyCost: 50,
+    accuracy: 100,
+    targetType: "all_enemies",
+    bypassShields: true,
+    bypassShieldsAndBlocks: true,
+    bypassUnkillable: true,
+    formulaText: "4.4 x ATK (AoE) • Pierces Buffs • Ignores 50% DEF • Block Revive",
+    description:
+      "Attacks all enemies. Will ignore [Shield], [Strengthen], [Ally Protection], [Unkillable] and [Block Damage] buffs, as well as 50% of target DEF. Enemies killed by this skill cannot be revived.\n[Spartan Unity]\n1 Spartan Ally: Before attacking, steals all buffs from target. Deals double damage against bosses.\n2 Spartan Allies: Before attacking, places 50% [Increase ATK], 30% [Increase C. DMG] and 30% [Increase C. RATE] buff for 2 turns.\n3 Spartan Allies: Ignores 75% DEF instead (100% vs bosses).",
+    onBeforeSkill({ attacker, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      if (spartanCount >= 2) {
+        engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 2 });
+        engine.statusManager.applyStatus(attacker, attacker, "crit_dmg_up", { duration: 2 });
+        engine.statusManager.applyStatus(attacker, attacker, "crit_rate_up", { duration: 2 });
+      }
+    },
+    onBeforeAttack({ attacker, target, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      if (spartanCount >= 1 && target && target.statuses) {
+        const stolenBuffs = target.statuses.filter((s) => s.category === "buff" && !s.isProtected);
+        for (const b of stolenBuffs) {
+          engine.statusManager.removeStatus(target, b.id, { forceProtected: true });
+          engine.statusManager.applyStatus(attacker, attacker, b.id, { duration: b.duration || 2 });
+        }
+        if (stolenBuffs.length > 0) {
+          engine.log(
+            `[Spartan Unity] ${attacker.name} steals ${stolenBuffs.length} buffs from ${target.name}!`,
+            "special"
+          );
+        }
+      }
+    },
+    getIgnoreDefPct({ attacker, target, engine }) {
+      const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
+      if (spartanCount >= 3) {
+        return target && target.isBoss ? 1.0 : 0.75;
+      }
+      return 0.5;
+    },
+    computeRawHit({ attacker, target, stats, engine }) {
+      const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
+      let mult = 4.4;
+      if (spartanCount >= 1 && target && target.isBoss) {
+        mult *= 2.0;
+      }
+      return mult * stats.atk;
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) {
+        engine.statusManager.applyStatus(attacker, target, "block_revive", { isProtected: true });
+      }
+    },
+  },
+
+  // 2. FRED-104 MOVES
+  {
+    id: "countermand",
+    name: "Countermand",
+    element: "Force",
+    category: "Melee",
+    stab: true,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "2.2 x DEF • Stun (25% + 5% per self buff & target debuff)",
+    description:
+      "Attacks one enemy. Has a 25% chance of placing a [Stun] debuff for 1 turn. This chance increases by 5% for each buff on this Champion and debuff on the target.",
+    computeRawHit({ stats }) {
+      return 2.2 * stats.def;
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) return;
+      const myBuffs = attacker.statuses.filter((s) => s.category === "buff").length;
+      const tgtDebuffs = target.statuses.filter((s) => s.category === "debuff").length;
+      const stunChance = 0.25 + 0.05 * (myBuffs + tgtDebuffs);
+      if (engine.rng() <= stunChance) {
+        engine.statusManager.applyStatus(attacker, target, "stun", { duration: 1 });
+      }
+    },
+  },
+  {
+    id: "armor_up",
+    name: "Armor Up!",
+    element: "Force",
+    category: "Status",
+    stab: false,
+    hits: 0,
+    cooldown: 3,
+    energyCost: 35,
+    accuracy: 100,
+    targetType: "all_allies",
+    formulaText: "Shield (6.5 x DEF) • [+DEF (60%)] & [Strengthen (25%)] (2T)",
+    description:
+      "Places a 60% [Increase DEF], 25% [Strengthen] and [Shield] buff on all allies for 2 turns. The [Shield] is proportional to this Champion's DEF.\n[Spartan Unity]\n1 Spartan Ally: Removes all debuffs from all allies before placing buffs.\n2 Spartan Allies: Also increases value of Shield by 10% (max 40,000).\n3 Spartan Allies: Buffs placed by this skill cannot be removed or dispelled.",
+    execute({ attacker, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      const allies = engine.getLivingAlliesOf(attacker);
+      const isProtected = spartanCount >= 3;
+
+      let baseShield = Math.floor(6.5 * engine.getEffectiveStats(attacker).def);
+      if (spartanCount >= 2) {
+        baseShield = Math.min(40000, Math.floor(baseShield * 1.1));
+      }
+
+      for (const ally of allies) {
+        if (spartanCount >= 1) {
+          ally.statuses = ally.statuses.filter((s) => s.category !== "debuff" || s.isProtected);
+          engine.log(`[Spartan Unity] Purged debuffs from ${ally.name}.`, "heal", {
+            isSkill: false,
+          });
+        }
+        engine.statusManager.applyStatus(attacker, ally, "def_up", { duration: 2, isProtected });
+        engine.statusManager.applyStatus(attacker, ally, "strengthen", {
+          duration: 2,
+          isProtected,
+        });
+        ally.shieldHp = (ally.shieldHp || 0) + baseShield;
+        engine.statusManager.applyStatus(attacker, ally, "shield", { duration: 2, isProtected });
+      }
+      engine.log(
+        `[Armor Up!] Fred-104 deploys ${baseShield} Shield, +DEF, and Strengthen to all allies!`,
+        "heal"
+      );
+    },
+  },
+  {
+    id: "cover_fire",
+    name: "Cover Fire",
+    element: "Force",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    cooldown: 4,
+    energyCost: 45,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "3.3 x DEF (AoE) • [Provoke] Enemies (1T) • [Block Damage] Self (1T) • [Ally Protection] (3T)",
+    description:
+      "Attacks all enemies. Places a [Provoke] debuff for 1 turn and a [Block Damage] buff on this Champion for 1 turn. Then places a 50% [Ally Protection] buff on all allies for 3 turns.",
+    computeRawHit({ stats }) {
+      return 3.3 * stats.def;
+    },
+    onBeforeSkill({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "block_damage", { duration: 1 });
+      for (const ally of engine.getLivingAlliesOf(attacker)) {
+        if (ally.id !== attacker.id) {
+          engine.statusManager.applyStatus(attacker, ally, "ally_protection", { duration: 3 });
+        }
+      }
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) return;
+      engine.statusManager.applyStatus(attacker, target, "provoke", { duration: 1 });
+    },
+  },
+
+  // 3. KELLY-087 MOVES
+  {
+    id: "ferocious_onslaught",
+    name: "Ferocious Onslaught",
+    element: "Magic",
+    category: "Melee",
+    stab: true,
+    hits: 2,
+    energyCost: 15,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "0.18 x MAX HP (x2 hits) • Ignores 20% DEF • [Continuous Heal] Lowest HP Ally",
+    description:
+      "Attacks one enemy two times. Each hit will ignore 20% of the target's DEF. Places a 15% [Continuous Heal] on the ally with the lowest HP.",
+    computeRawHit({ stats }) {
+      return 0.18 * stats.hp;
+    },
+    getIgnoreDefPct() {
+      return 0.2;
+    },
+    onAfterAttack({ attacker, engine }) {
+      const allies = engine.getLivingAlliesOf(attacker);
+      if (allies.length > 0) {
+        const lowestAlly = [...allies].sort(
+          (a, b) => a.currentHp / a.effectiveMaxHp - b.currentHp / b.effectiveMaxHp
+        )[0];
+        engine.statusManager.applyStatus(attacker, lowestAlly, "continuous_heal", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "calculated_fortification",
+    name: "Calculated Fortification",
+    element: "Magic",
+    category: "Status",
+    stab: false,
+    hits: 0,
+    cooldown: 3,
+    energyCost: 40,
+    accuracy: 100,
+    targetType: "all_allies",
+    formulaText: "Shield (100% Kelly MAX HP) • Heal 25% MAX HP • [+ATK (50%)] (2T)",
+    description:
+      "Places a [Shield] buff on all allies equal to this Champion's MAX HP. Then, heals all allies by 25% of their MAX HP and places a 50% [Increase ATK] buff on all allies for 2 turns.\n[Spartan Unity]\n1 Spartan Ally: Shield cannot be removed.\n2 Spartan Allies: Also places [Strengthen (25%)] and [Fortify (15%)] for 2 turns.\n3 Spartan Allies: Allies deal +10% more damage for each buff placed by this skill.",
+    execute({ attacker, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      const shieldVal = attacker.effectiveMaxHp;
+      const isProtectedShield = spartanCount >= 1;
+      const allies = engine.getLivingAlliesOf(attacker);
+
+      for (const ally of allies) {
+        ally.shieldHp = (ally.shieldHp || 0) + shieldVal;
+        ally._kellyShieldActive = true;
+        engine.statusManager.applyStatus(attacker, ally, "shield", {
+          duration: 2,
+          isProtected: isProtectedShield,
+        });
+        const healAmt = Math.max(1, Math.floor(ally.effectiveMaxHp * 0.25));
+        engine.healUnit(ally, healAmt, "Calculated Fortification");
+        engine.statusManager.applyStatus(attacker, ally, "atk_up", { duration: 2 });
+
+        if (spartanCount >= 2) {
+          engine.statusManager.applyStatus(attacker, ally, "strengthen", { duration: 2 });
+          engine.statusManager.applyStatus(attacker, ally, "fortify", { duration: 2 });
+        }
+
+        if (spartanCount >= 3) {
+          ally.customCounters.calculatedFortBonusDmgPct = spartanCount >= 2 ? 0.4 : 0.2;
+        }
+      }
+      engine.log(
+        `[Calculated Fortification] Kelly-087 grants ${shieldVal} Shield, 25% Heal, and offensive buffs to all allies!`,
+        "heal"
+      );
+    },
+  },
+  {
+    id: "rapid_intervention",
+    name: "Rapid Intervention",
+    element: "Magic",
+    category: "Status",
+    stab: false,
+    hits: 0,
+    cooldown: 4,
+    energyCost: 45,
+    accuracy: 100,
+    targetType: "all_allies",
+    formulaText: "[Perfect Veil] Lowest HP Ally (2T) • Equalize All Allies HP to Highest HP",
+    description:
+      "Places a [Perfect Veil] buff on the ally with the lowest HP for 2 turns. Then, equalizes the HP of all allies. The HP of all allies will be brought to the level of the ally with the highest HP.",
+    execute({ attacker, engine }) {
+      const allies = engine.getLivingAlliesOf(attacker);
+      if (allies.length === 0) return;
+
+      const lowestAlly = [...allies].sort(
+        (a, b) => a.currentHp / a.effectiveMaxHp - b.currentHp / b.effectiveMaxHp
+      )[0];
+      engine.statusManager.applyStatus(attacker, lowestAlly, "perfect_veil", { duration: 2 });
+
+      const maxHpPct = Math.max(...allies.map((a) => a.currentHp / a.effectiveMaxHp));
+      for (const ally of allies) {
+        const targetHp = Math.min(ally.effectiveMaxHp, Math.floor(ally.effectiveMaxHp * maxHpPct));
+        if (targetHp > ally.currentHp) {
+          const diff = targetHp - ally.currentHp;
+          ally.currentHp = targetHp;
+          engine.log(
+            `[Rapid Intervention] ${ally.name}'s HP equalized +${diff} -> (${ally.currentHp}/${ally.effectiveMaxHp} HP).`,
+            "heal",
+            { isSkill: false }
+          );
+        }
+      }
+    },
+  },
+
+  // 4. LINDA-034 MOVES
+  {
+    id: "headshot",
+    name: "Headshot",
+    element: "Void",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    alwaysCrit: true,
+    energyCost: 15,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "3.2 x ATK • Always Critical • [-ATK (50%)] (2T or 3T AoE on kill)",
+    description:
+      "Attacks one enemy. This attack is always critical. Places a 50% [Decrease ATK] debuff on the target for 2 turns. If the target was killed, instead places a 50% [Decrease ATK] debuff on all enemies for 3 turns. This debuff cannot be blocked.",
+    computeRawHit({ stats }) {
+      return 3.2 * stats.atk;
+    },
+    onAfterAttack({ attacker, target, engine }) {
+      if (target && target.currentHp <= 0) {
+        for (const enemy of engine.getLivingEnemiesOf(attacker)) {
+          engine.statusManager.applyStatus(attacker, enemy, "atk_down", {
+            duration: 3,
+            isProtected: true,
+          });
+        }
+        engine.log(
+          `[Headshot Lethal] Elimination achieved! All remaining enemies suffer unblockable 50% [-ATK] for 3 turns.`,
+          "special"
+        );
+      } else if (target && target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "atk_down", { duration: 2 });
+      }
+    },
+  },
+  {
+    id: "death_from_afar",
+    name: "Death from Afar",
+    element: "Void",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    alwaysCrit: true,
+    cooldown: 3,
+    energyCost: 35,
+    accuracy: 100,
+    targetType: "single_enemy",
+    formulaText: "3.9 x ATK • Always Critical • Ignores 50% DEF • [+ATK & Perfect Veil] Self (2T)",
+    description:
+      "Attacks one enemy. This attack is always critical and will ignore 50% of target DEF. Before attacking, places a 50% [Increase ATK] and [Perfect Veil] buff on this Champion for 2 turns.\n[Spartan Unity]\n1 Spartan Ally: Enemies killed cannot be revived.\n2 Spartan Allies: Ignores [Shield], [Block Damage], and [Unkillable] buffs.\n3 Spartan Allies: If target is killed, instantly activates No More Hiding without cooldown.",
+    onBeforeAttack({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 2 });
+      engine.statusManager.applyStatus(attacker, attacker, "perfect_veil", { duration: 2 });
+    },
+    getIgnoreDefPct() {
+      return 0.5;
+    },
+    computeRawHit({ stats }) {
+      return 3.9 * stats.atk;
+    },
+    onBeforeSkill({ attacker, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      if (spartanCount >= 2) {
+        this.bypassShields = true;
+        this.bypassShieldsAndBlocks = true;
+        this.bypassUnkillable = true;
+      } else {
+        this.bypassShields = false;
+        this.bypassShieldsAndBlocks = false;
+        this.bypassUnkillable = false;
+      }
+    },
+    onAfterAttack({ attacker, target, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      if (target && target.currentHp <= 0) {
+        if (spartanCount >= 1) {
+          engine.statusManager.applyStatus(attacker, target, "block_revive", { isProtected: true });
+        }
+        if (spartanCount >= 3) {
+          engine.log(
+            `[Spartan Unity] Death from Afar secures kill: Linda-034 instantly activates [No More Hiding]!`,
+            "special"
+          );
+          engine.executeCounterSkill(attacker, "no_more_hiding");
+        }
+      }
+    },
+  },
+  {
+    id: "no_more_hiding",
+    name: "No More Hiding",
+    element: "Void",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    alwaysCrit: true,
+    cooldown: 5,
+    energyCost: 50,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "4.4 x ATK (x2 hits) • Always Crit • Ignores 15%/30% DEF • [-DEF (60%) & -ATK (50%)] (3T)",
+    description:
+      "Attacks all enemies. This attack is always critical. Ignores 15% of target DEF. Then, attacks all enemies again (ignoring an additional 15% DEF). Places a 60% [Decrease DEF] and 50% [Decrease ATK] debuff on all enemies for 3 turns.\n[Spartan Unity]\n1 Spartan Ally: Before attacking, steals all buffs from all enemies.\n2 Spartan Allies: Ignores an additional 5% DEF for each buff on Linda.\n3 Spartan Allies: Damage increases by Shield value (up to 500%).",
+    onBeforeSkill({ attacker, engine }) {
+      const spartanCount = engine.getSpartanAlliesCount(attacker);
+      if (spartanCount >= 1) {
+        for (const enemy of engine.getLivingEnemiesOf(attacker)) {
+          const stolenBuffs = (enemy.statuses || []).filter(
+            (s) => s.category === "buff" && !s.isProtected
+          );
+          for (const b of stolenBuffs) {
+            engine.statusManager.removeStatus(enemy, b.id, { forceProtected: true });
+            engine.statusManager.applyStatus(attacker, attacker, b.id, { duration: b.duration || 2 });
+          }
+        }
+      }
+    },
+    getIgnoreDefPct({ attacker, hitIndex, engine }) {
+      const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
+      let baseIgnore = hitIndex === 0 ? 0.15 : 0.3;
+      if (spartanCount >= 2) {
+        const myBuffs = (attacker.statuses || []).filter((s) => s.category === "buff").length;
+        baseIgnore += myBuffs * 0.05;
+      }
+      return Math.min(1.0, baseIgnore);
+    },
+    computeRawHit({ attacker, stats, engine }) {
+      let mult = 4.4;
+      const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
+      if (spartanCount >= 3 && attacker.shieldHp > 0) {
+        const shieldRatio = attacker.shieldHp / attacker.effectiveMaxHp;
+        const bonusMult = Math.min(4.0, shieldRatio * 2.0);
+        mult *= 1 + bonusMult;
+      }
+      return mult * stats.atk;
+    },
+    onEachHit({ attacker, target, hitIndex, engine }) {
+      if (hitIndex === 1 && target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 3 });
+        engine.statusManager.applyStatus(attacker, target, "atk_down", { duration: 3 });
+      }
+    },
+  },
 ];
 
 export function registerAllSkills() {

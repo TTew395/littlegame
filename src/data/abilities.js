@@ -641,6 +641,52 @@ export const ABILITY_LIST = [
       );
     },
   },
+  {
+    id: "luck_is_on_my_side",
+    name: "Luck Is On My Side",
+    flags: {
+      innateEvadeChance: 0.1,
+      convertHitsToWeakHitsChance: 0.25,
+      spartanTeamUp: true,
+      spartanBigHitEvade: true,
+    },
+    description:
+      "[Passive Effect] When attacked, has a 25% chance of converting normal, strong and critical hits to weak hits (30% reduced damage). Has a 10% chance of Evading an enemy skill and all associated effects. Whenever this Champion attacks or counterattacks, all Fred-104s, Kelly-087s and Linda-034s will join in with their basic skills.\n[Active Effect] Cooldown: 3 turns. When receiving damage greater than 30% of this Champion's MAX HP, will Evade the skill and all associated effects. Then grants an Instant Turn.\n[Spartan Unity]\n1 Spartan Ally: Also decreases the cooldown of this Champion's skills by 1 turn.\n2 Spartan Allies: Also boosts the Turn Meter of all allies, including this Champion, by 25%.\n3 Spartan Allies: Fully heals this Champion, then instantly activates the Battle Fire skill without placing it on cooldown.",
+  },
+  {
+    id: "defensive_bulwark",
+    name: "Defensive Bulwark",
+    flags: {
+      spartanTeamUp: true,
+      defensiveBulwarkDamageShare: true,
+      spartanBigHitArmorUp: true,
+    },
+    description:
+      "[Passive Effect] Whenever an ally receives damage, this Champion will receive 25% of the damage instead. Heals this Champion by 20% of their DEF each time they take damage.\n[Spartan Unity]\n1 Spartan Ally: This Champion receives 50% of damage taken and heals by 45% of their DEF.\n2 Spartan Allies: Also places a [Shield] buff on this Champion and the attacked ally.\n3 Spartan Allies: Also counterattacks with the Countermand skill.\nWhenever this Champion attacks or counterattacks, all John-117s, Kelly-087s and Linda-034s will join in with their basic skills.\n[Active Effect] Whenever this Champion receives damage greater than 30% of their MAX HP, instantly activates the Armor Up skill without placing it on cooldown.",
+  },
+  {
+    id: "guarded_and_ready",
+    name: "Guarded and Ready",
+    flags: {
+      spartanTeamUp: true,
+      guardedReadyShieldEcho: true,
+      guardedReadyEmergencyStoneSkin: true,
+    },
+    description:
+      "[Passive Effect] Whenever an ally under a [Shield] buff placed by this Champion takes damage, heals them by 50% of the damage taken. Whenever this Champion attacks or counterattacks, all John-117s, Fred-104s and Linda-034s will join in with their basic skill.\n[Active Effect] Cooldown: 4 turns. Whenever an ally drops below 50% HP, removes all debuffs from them and places a [Stone Skin] buff on them for 1 turn.",
+  },
+  {
+    id: "pinpoint_accuracy",
+    name: "Pinpoint Accuracy",
+    flags: {
+      spartanTeamUp: true,
+      immuneToCritFromLowerAtk: true,
+      ignoreDefAgainstLowerAtk: true,
+      healOnDamageDealtPct: 0.25,
+    },
+    description:
+      "This Champion cannot receive critical hits from enemies whose ATK is lower than this Champion's. This Champion's hits will ignore 20% DEF of each target whose ATK is lower than this Champion's. Heals this Champion by 25% of damage inflicted. Whenever this Champion attacks or counterattacks, all John-117s, Fred-104s and Kelly-087s will join in with their basic skill.",
+  },
 ];
 
 export function registerAllAbilities() {

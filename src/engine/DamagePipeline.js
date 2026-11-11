@@ -153,8 +153,31 @@ export class DamagePipeline {
     }
 
     // 3. Critical Hit Roll (Supports guaranteed crit skills and Wrongly Created 2.0x crit)
-    const isCrit =
+    let isCrit =
       Boolean(skill.alwaysCrit) || this.engine.rng() * 100 < atkStats.critRate;
+
+    // Linda-034's Pinpoint Accuracy: cannot receive crits from enemies with lower ATK
+    if (isCrit && target && this.engine.hasAbilityFlag(target, "immuneToCritFromLowerAtk")) {
+      const tgtAtk = this.engine.getEffectiveStats(target).atk;
+      if (atkStats.atk < tgtAtk) {
+        isCrit = false;
+      }
+    }
+
+    // John-117's Luck Is On My Side: 25% chance of converting hits to weak hits (30% less damage, cannot crit)
+    if (target && this.engine.hasAbilityFlag(target, "convertHitsToWeakHitsChance")) {
+      const weakChance =
+        this.engine.getAbilityFlagValue(target, "convertHitsToWeakHitsChance") || 0.25;
+      if (this.engine.rng() < weakChance) {
+        isCrit = false;
+        rawDamage *= 0.7;
+        this.engine.log(
+          `[Weak Hit] ${target.name}'s Luck Is On My Side glanced the incoming blow (-30% DMG)!`,
+          "info"
+        );
+      }
+    }
+
     if (isCrit) {
       const fixedCritMult = this.engine.getAbilityFlagValue(attacker, "fixedCritMultiplier");
       if (fixedCritMult) {
@@ -164,8 +187,21 @@ export class DamagePipeline {
       }
     }
 
+    // Kelly-087's Calculated Fortification damage bonus
+    if (attacker.customCounters?.calculatedFortBonusDmgPct) {
+      rawDamage *= 1 + attacker.customCounters.calculatedFortBonusDmgPct;
+    }
+
     // 4. Defense Mitigation (Supports positive DEF reduction and negative DEF amplification)
     let clampedIgnoreDef = Math.max(0, Math.min(1, ignoreDefPct));
+
+    // Linda-034's Pinpoint Accuracy: hits ignore 20% DEF of targets with lower ATK
+    if (target && this.engine.hasAbilityFlag(attacker, "ignoreDefAgainstLowerAtk")) {
+      const tgtAtk = this.engine.getEffectiveStats(target).atk;
+      if (atkStats.atk > tgtAtk) {
+        clampedIgnoreDef = Math.min(1.0, clampedIgnoreDef + 0.2);
+      }
+    }
 
     // Item Ignore DEF bonus (e.g. Crushing Warhammer, Refracting Mirror)
     const atkItem = this.engine.getActiveItem(attacker);
@@ -270,6 +306,9 @@ export class DamagePipeline {
 
       // Status-based damage modifiers (War Armor, Forever Waiting, Deathbrand, Vulnerability, Brittle, Decay)
       for (const st of target.statuses) {
+        if (skill.bypassShieldsAndBlocks && (st.id === "strengthen" || st.id === "ally_protection")) {
+          continue;
+        }
         const def = Registry.getStatus(st.id);
         if (!def || !def.statModifiers) continue;
         if (def.statModifiers.dmgReductionPerStack) {

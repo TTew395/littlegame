@@ -20,6 +20,12 @@ export const SPECIES_LIST = [
     damageReductionByType: {},
   },
   {
+    id: "spartan",
+    name: "Spartan-II",
+    description: "Genetically augmented super-soldier encased in powered Mjolnir armor. Excels in coordinated squad warfare and unified fire.",
+    damageReductionByType: {},
+  },
+  {
     id: "higher_being",
     name: "Higher Being",
     description: "50% reduced damage from Chaos, Dragon and Tek.",
