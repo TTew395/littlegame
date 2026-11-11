@@ -7,8 +7,8 @@
  */
 
 import { Registry } from "./Registry.js";
-import { StatusManager } from "./StatusManager.js?v=6";
-import { DamagePipeline } from "./DamagePipeline.js?v=6";
+import { StatusManager } from "./StatusManager.js?v=10";
+import { DamagePipeline } from "./DamagePipeline.js?v=10";
 
 function createSeededRng(seed = Date.now()) {
   let a = seed >>> 0;
@@ -405,6 +405,12 @@ export class BattleEngine {
     );
   }
 
+  fillTurnMeter(unit, amount) {
+    if (!unit || !Number.isFinite(amount)) return;
+    const fraction = Math.abs(amount) > 1 ? amount / 1000 : amount;
+    this.modifyTurnMeter(unit, fraction);
+  }
+
   grantExtraTurn(unit, { suppressReactions = false } = {}) {
     if (unit.currentHp > 0 && !this.extraTurnQueue.includes(unit.id)) {
       this.extraTurnQueue.unshift(unit.id);
@@ -570,7 +576,7 @@ export class BattleEngine {
       }
       if (spartanCount >= 2) {
         for (const ally of this.getLivingAlliesOf(target)) {
-          this.fillTurnMeter(ally, 250);
+          this.modifyTurnMeter(ally, 0.25);
         }
       }
       if (spartanCount >= 3) {
@@ -1515,7 +1521,11 @@ export class BattleEngine {
       }
     }
 
-    this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
+    try {
+      this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
+    } catch (err) {
+      console.error(`Error resolving skill ${skill.id}:`, err);
+    }
     this.syncUnitActiveMoves(attacker);
 
     if (moveId === "rest") {

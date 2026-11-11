@@ -32,6 +32,19 @@ export class StatusManager {
     });
   }
 
+  getStatModifier(unit, modKey) {
+    if (!unit || !unit.statuses) return null;
+    let result = null;
+    for (const st of unit.statuses) {
+      const def = Registry.getStatus(st.id);
+      if (def && def.statModifiers && def.statModifiers[modKey] !== undefined) {
+        const val = def.statModifiers[modKey];
+        result = result === null ? val : result * val;
+      }
+    }
+    return result;
+  }
+
   isImmuneTo(target, statusId) {
     const abilities = this.engine.getActiveAbilities(target);
     for (const ab of abilities) {
