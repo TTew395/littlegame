@@ -268,7 +268,9 @@ class GameApp {
     const container = document.getElementById("character-pool-grid");
     if (!container) return;
 
-    const playableChars = Registry.getAllCharacters().filter((c) => !c.isMinion);
+    const playableChars = Registry.getAllCharacters()
+      .filter((c) => !c.isMinion)
+      .sort((a, b) => Number(Boolean(a.isBoss)) - Number(Boolean(b.isBoss)));
 
     container.innerHTML = playableChars
       .map((c) => {

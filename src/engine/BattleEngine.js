@@ -539,7 +539,15 @@ export class BattleEngine {
       isRedirectedDamage = false,
     } = {}
   ) {
-    if (target.currentHp <= 0 || amount <= 0 || target._justRevivedProtectThisSkill) return 0;
+    if (
+      !target ||
+      target.currentHp <= 0 ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      target._justRevivedProtectThisSkill
+    ) {
+      return 0;
+    }
 
     // John-117 Luck Is On My Side Active: Evade massive damage (>30% MAX HP) + Instant Turn
     if (
@@ -945,7 +953,7 @@ export class BattleEngine {
   }
 
   healUnit(target, amount, sourceLabel = "Healing") {
-    if (target.currentHp <= 0) return 0;
+    if (!target || target.currentHp <= 0 || !Number.isFinite(amount) || amount <= 0) return 0;
     const healMod = this.statusManager.getStatModifier(target, "healReceivedMultiplier") ?? 1.0;
     const itemMod = this.getActiveItem(target)?.id === "crystal_jade" ? 1.1 : 1.0;
     const effectiveHeal = Math.max(0, Math.floor(amount * healMod * itemMod));

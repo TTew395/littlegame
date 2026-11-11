@@ -20,6 +20,9 @@ export class DamagePipeline {
 
   getEffectiveStats(unit) {
     const stats = {
+      hp: unit.effectiveMaxHp ?? unit.baseMaxHp ?? 100,
+      maxHp: unit.effectiveMaxHp ?? unit.baseMaxHp ?? 100,
+      energy: unit.maxEnergy ?? 100,
       atk: unit.baseStats.atk,
       def: unit.baseStats.def,
       spd: unit.baseStats.spd,
@@ -116,6 +119,9 @@ export class DamagePipeline {
       hitIndex,
       engine: this.engine,
     });
+    if (!Number.isFinite(rawDamage) || rawDamage < 0) {
+      rawDamage = atkStats.atk || 1;
+    }
 
     // Cap skills that scale off ENEMY MAX HP against Almighty Immunity bosses (e.g. For One is Holy)
     if (
@@ -375,8 +381,9 @@ export class DamagePipeline {
       finalDamage *= 2.0;
     }
 
+    const safeFinalDamage = Number.isFinite(finalDamage) ? finalDamage : 1;
     return {
-      damage: Math.max(1, Math.round(finalDamage)),
+      damage: Math.max(1, Math.round(safeFinalDamage)),
       isCrit,
       ignoredDefPct: Math.round(clampedIgnoreDef * 100),
     };

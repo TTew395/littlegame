@@ -2465,8 +2465,8 @@ export const SKILL_LIST = [
     formulaText: "0.18 x MAX HP (x2 hits) • Ignores 20% DEF • [Continuous Heal] Lowest HP Ally",
     description:
       "Attacks one enemy two times. Each hit will ignore 20% of the target's DEF. Places a 15% [Continuous Heal] on the ally with the lowest HP.",
-    computeRawHit({ stats }) {
-      return 0.18 * stats.hp;
+    computeRawHit({ attacker, stats }) {
+      return 0.18 * (attacker?.effectiveMaxHp || stats.hp || 100);
     },
     getIgnoreDefPct() {
       return 0.2;
