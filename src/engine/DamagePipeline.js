@@ -68,8 +68,13 @@ export class DamagePipeline {
         stats.def *= mod.defMultiplier;
       }
       if (mod.spdMultiplier !== undefined) stats.spd *= mod.spdMultiplier;
+      if (mod.critRateBonus !== undefined) stats.critRate += mod.critRateBonus;
+      if (mod.critDmgBonus !== undefined) stats.critDmg += mod.critDmgBonus;
       if (mod.critDmgPerStack) stats.critDmg += mod.critDmgPerStack * st.stacks;
     }
+
+    stats.critRate = Math.max(0, Math.min(100, stats.critRate));
+    stats.critDmg = Math.max(0, stats.critDmg);
 
     // 3. Stance modifier: "Rest" halves defense until turn comes back to the character
     if (unit.stance === "rest" && stats.def > 0) {

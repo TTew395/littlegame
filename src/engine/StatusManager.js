@@ -331,10 +331,52 @@ export class StatusManager {
     return false;
   }
 
+  isStatModifierStatus(def) {
+    if (!def) return false;
+    if (def.statModifiers && Object.keys(def.statModifiers).length > 0) return true;
+    const statIds = [
+      "def_up", "atk_up", "spd_up", "crit_rate_up", "crit_dmg_up",
+      "def_down", "atk_down", "spd_down", "crit_rate_down", "crit_dmg_down",
+      "hex", "strengthen", "fortify", "shatter", "predator_sprint",
+      "evolution_vulnerability", "flectere_exhaustion", "vulnerability",
+      "dazed", "blindness", "unbalanced", "windstruck"
+    ];
+    return statIds.includes(def.id);
+  }
+
+  isDamageOrHealStatus(def) {
+    if (!def) return false;
+    const dmgHealIds = [
+      "burn", "bleed", "poison_dot", "poison", "hemorrhage", "acidic",
+      "acid_burns", "energy_burns", "cursed_bleed", "soup_burn",
+      "gauss", "corruption_sickness", "continuous_heal"
+    ];
+    if (dmgHealIds.includes(def.id)) return true;
+    if (
+      def.id.includes("heal") ||
+      def.id.includes("burn") ||
+      def.id.includes("bleed") ||
+      def.id.includes("poison")
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   tickStatuses(unit, timing) {
     if (unit.currentHp <= 0) return;
 
     if (timing === "TURN_START") {
+      const handledAtStart = new Set([
+        "bleed",
+        "poison_dot",
+        "hemorrhage",
+        "acidic",
+        "decay",
+        "burn",
+        "continuous_heal",
+      ]);
+
       for (const st of [...unit.statuses]) {
         if (st.id === "bleed") {
           let pct = 0.03 * st.stacks;
@@ -373,6 +415,16 @@ export class StatusManager {
           this.engine.dealTrueDamage(unit, dmg, `Decay x${st.stacks}`);
         } else if (st.id === "burn") {
           this.engine.triggerBurnTick(unit);
+        } else if (st.id === "continuous_heal") {
+          const stacks = st.stacks || 1;
+          const healPct = 0.1 * stacks;
+          const healAmt = Math.max(1, Math.floor(unit.effectiveMaxHp * healPct));
+          this.engine.healUnit(unit, healAmt, `Continuous Heal x${stacks}`);
+        } else if (!handledAtStart.has(st.id)) {
+          const def = Registry.getStatus(st.id);
+          if (def && typeof def.onTurnStart === "function") {
+            def.onTurnStart({ unit, engine: this.engine, status: st });
+          }
         }
       }
     }
@@ -385,7 +437,19 @@ export class StatusManager {
         continue;
       }
 
-      if (def.tickTiming === timing) {
+      // Determine effective duration decrement timing:
+      // 1. Buffs and debuffs that boost or decrease stats (Increase/Decrease DEF, ATK, SPD, C. Rate, C. DMG, etc.)
+      //    decrement strictly after the turn ends (timing === "TURN_END").
+      // 2. Buffs and debuffs that deal damage or heal (Continuous Heal, Burn, Bleed, Poison, etc.)
+      //    tick and decrement when the turn starts (timing === "TURN_START").
+      let effectiveTiming = def.tickTiming;
+      if (this.isStatModifierStatus(def)) {
+        effectiveTiming = "TURN_END";
+      } else if (this.isDamageOrHealStatus(def)) {
+        effectiveTiming = "TURN_START";
+      }
+
+      if (effectiveTiming === timing) {
         st.duration -= 1;
         if (st.duration > 0) {
           remaining.push(st);

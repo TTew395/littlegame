@@ -720,6 +720,24 @@ export class BattleEngine {
     });
   }
 
+  healUnit(target, amount, sourceLabel = "Healing") {
+    if (target.currentHp <= 0) return 0;
+    const healMod = this.statusManager.getStatModifier(target, "healReceivedMultiplier") ?? 1.0;
+    const itemMod = this.getActiveItem(target)?.id === "crystal_jade" ? 1.1 : 1.0;
+    const effectiveHeal = Math.max(0, Math.floor(amount * healMod * itemMod));
+    const prevHp = target.currentHp;
+    target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + effectiveHeal);
+    const actualGained = target.currentHp - prevHp;
+    if (actualGained > 0) {
+      this.log(
+        `[${sourceLabel}] ${target.name} recovers +${actualGained} HP (${target.currentHp}/${target.effectiveMaxHp} HP).`,
+        "heal",
+        { isSkill: false }
+      );
+    }
+    return actualGained;
+  }
+
   handleUnitDeath(target, killer) {
     target.currentHp = 0;
     target.turnMeter = 0;

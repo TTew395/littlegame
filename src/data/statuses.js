@@ -149,6 +149,28 @@ export const STATUS_LIST = [
     statModifiers: { spdMultiplier: 0.7 },
   },
   {
+    id: "crit_rate_down",
+    name: "Decrease C. Rate",
+    icon: "-CRATE",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Decreases character's C. Rate by 30%.",
+    statModifiers: { critRateBonus: -30 },
+  },
+  {
+    id: "crit_dmg_down",
+    name: "Decrease C. DMG",
+    icon: "-CDMG",
+    category: "debuff",
+    stackBehavior: "refresh",
+    maxStacks: 1,
+    tickTiming: "TURN_END",
+    description: "Decreases character's C. DMG by 30%.",
+    statModifiers: { critDmgBonus: -30 },
+  },
+  {
     id: "hex",
     name: "Hex",
     icon: "HEX",
@@ -207,7 +229,7 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_END",
+    tickTiming: "TURN_START",
     description: "Damages opponent by 5 HP each turn if hit with a Water type move (includes status moves). Corrodes armor (-20% DEF).",
     statModifiers: { defMultiplier: 0.8 },
   },
@@ -218,7 +240,7 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
+    tickTiming: "TURN_END",
     description: "Lowers the opponent's Defense by 1 each turn.",
     onTurnStart({ unit, engine }) {
       unit.baseStats.def = Math.max(0, unit.baseStats.def - 1);
@@ -232,7 +254,7 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
+    tickTiming: "TURN_END",
     description: "Reduces Attack and Defense by 10%, making target more vulnerable to types they usually resist.",
     statModifiers: { atkMultiplier: 0.9, defMultiplier: 0.9 },
   },
@@ -243,7 +265,7 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
+    tickTiming: "TURN_END",
     description: "Lowers accuracy of opponent by 6% each turn.",
     onTurnStart({ unit }) {
       unit.customCounters.accuracyPenalty = (unit.customCounters.accuracyPenalty || 0) + 6;
@@ -559,7 +581,7 @@ export const STATUS_LIST = [
     category: "debuff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
+    tickTiming: "TURN_END",
     description: "50% chance that the chosen move fails and the character performs Rest instead.",
     flags: { dazedRestChance: 0.5 },
   },
@@ -728,6 +750,23 @@ export const STATUS_LIST = [
     statModifiers: { critDmgBonus: 30 },
   },
   {
+    id: "continuous_heal",
+    name: "Continuous Heal",
+    icon: "C-HEAL",
+    category: "buff",
+    stackBehavior: "stack",
+    maxStacks: 5,
+    defaultDuration: 2,
+    tickTiming: "TURN_START",
+    description: "Heals 10% of MAX HP at the start of the character's turn.",
+    onTurnStart({ unit, engine, status }) {
+      if (unit.currentHp <= 0) return;
+      const stacks = status?.stacks || 1;
+      const healAmount = Math.max(1, Math.floor(unit.effectiveMaxHp * 0.1 * stacks));
+      engine.healUnit(unit, healAmount, `Continuous Heal x${stacks}`);
+    },
+  },
+  {
     id: "strengthen",
     name: "Strengthen",
     icon: "STRNG",
@@ -847,8 +886,8 @@ export const STATUS_LIST = [
     category: "buff",
     stackBehavior: "refresh",
     maxStacks: 1,
-    tickTiming: "TURN_START",
-    description: "Boosts Speed by 100% until the beginning of the next turn.",
+    tickTiming: "TURN_END",
+    description: "Boosts Speed by 100% until the end of the turn.",
     statModifiers: { spdMultiplier: 2.0 },
   },
   {
