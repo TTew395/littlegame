@@ -12,6 +12,7 @@ class ContentRegistry {
     this.species = new Map();
     this.items = new Map();
     this.summons = new Map();
+    this.instantEffects = new Map();
   }
 
   registerCharacter(def) {
@@ -56,6 +57,12 @@ class ContentRegistry {
     return def;
   }
 
+  registerInstantEffect(def) {
+    if (!def.id) throw new Error("Instant Effect definition requires an id");
+    this.instantEffects.set(def.id, def);
+    return def;
+  }
+
   getCharacter(id) {
     return this.characters.get(id);
   }
@@ -84,12 +91,32 @@ class ContentRegistry {
     return this.summons.get(id);
   }
 
+  getInstantEffect(id) {
+    return this.instantEffects.get(id);
+  }
+
   getAllCharacters() {
     return Array.from(this.characters.values());
   }
 
   getAllItems() {
     return Array.from(this.items.values());
+  }
+
+  getAllStatuses() {
+    return Array.from(this.statuses.values());
+  }
+
+  getAllSkills() {
+    return Array.from(this.skills.values());
+  }
+
+  getAllAbilities() {
+    return Array.from(this.abilities.values());
+  }
+
+  getAllInstantEffects() {
+    return Array.from(this.instantEffects.values());
   }
 }
 

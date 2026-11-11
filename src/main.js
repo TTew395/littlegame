@@ -118,7 +118,11 @@ class GameApp {
       },
     });
 
+    this.statusDrawerFilter = "all";
+    this.statusDrawerSearch = "";
+
     this.bindStaticEvents();
+    this.initStatusDrawer();
     this.renderHub();
     this.renderCodexModal();
   }
@@ -1107,6 +1111,233 @@ class GameApp {
               .map((a) => `<p><strong>Ability — ${a.name}:</strong> ${a.description}</p>`)
               .join("")}
           </div>
+        `;
+      })
+      .join("");
+  }
+
+  // =========================================================================
+  // STATUS DEFINITIONS DRAWER (BUFFS, DEBUFFS, INSTANT EFFECTS)
+  // =========================================================================
+  initStatusDrawer() {
+    const overlay = document.getElementById("status-drawer-overlay");
+    const backdrop = document.getElementById("drawer-backdrop");
+    const closeBtn = document.getElementById("close-drawer-btn");
+    const buffsTabBtn = document.getElementById("side-tab-buffs-btn");
+    const debuffsTabBtn = document.getElementById("side-tab-debuffs-btn");
+    const searchInput = document.getElementById("drawer-search-input");
+    const searchClear = document.getElementById("drawer-search-clear-btn");
+    const categoryBtns = document.querySelectorAll(".drawer-category-btn");
+
+    buffsTabBtn?.addEventListener("click", () => {
+      this.toggleStatusDrawer("buff");
+    });
+
+    debuffsTabBtn?.addEventListener("click", () => {
+      this.toggleStatusDrawer("debuff");
+    });
+
+    closeBtn?.addEventListener("click", () => {
+      this.closeStatusDrawer();
+    });
+
+    backdrop?.addEventListener("click", () => {
+      this.closeStatusDrawer();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay && !overlay.classList.contains("hidden")) {
+        this.closeStatusDrawer();
+      }
+    });
+
+    categoryBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const filter = btn.dataset.filter || "all";
+        this.statusDrawerFilter = filter;
+        categoryBtns.forEach((b) => b.classList.toggle("active", b === btn));
+        this.renderStatusDrawer();
+      });
+    });
+
+    searchInput?.addEventListener("input", (e) => {
+      this.statusDrawerSearch = e.target.value.trim().toLowerCase();
+      searchClear?.classList.toggle("hidden", !this.statusDrawerSearch);
+      this.renderStatusDrawer();
+    });
+
+    searchClear?.addEventListener("click", () => {
+      if (searchInput) searchInput.value = "";
+      this.statusDrawerSearch = "";
+      searchClear.classList.add("hidden");
+      this.renderStatusDrawer();
+    });
+
+    this.renderStatusDrawer();
+  }
+
+  openStatusDrawer(filter = null) {
+    const overlay = document.getElementById("status-drawer-overlay");
+    if (!overlay) return;
+
+    if (filter) {
+      this.statusDrawerFilter = filter;
+      const categoryBtns = document.querySelectorAll(".drawer-category-btn");
+      categoryBtns.forEach((b) => b.classList.toggle("active", b.dataset.filter === filter));
+    }
+
+    overlay.classList.remove("hidden");
+    this.renderStatusDrawer();
+  }
+
+  closeStatusDrawer() {
+    const overlay = document.getElementById("status-drawer-overlay");
+    overlay?.classList.add("hidden");
+  }
+
+  toggleStatusDrawer(filter) {
+    const overlay = document.getElementById("status-drawer-overlay");
+    if (!overlay) return;
+
+    const isCurrentlyOpen = !overlay.classList.contains("hidden");
+    if (isCurrentlyOpen && this.statusDrawerFilter === filter) {
+      this.closeStatusDrawer();
+    } else {
+      this.openStatusDrawer(filter);
+    }
+  }
+
+  renderStatusDrawer() {
+    const cardList = document.getElementById("drawer-card-list");
+    if (!cardList) return;
+
+    const statuses = Registry.getAllStatuses ? Registry.getAllStatuses() : [];
+    const instantEffects = Registry.getAllInstantEffects ? Registry.getAllInstantEffects() : [];
+
+    // Update tallies
+    const buffCount = statuses.filter((s) => s.category === "buff" || s.category === "special").length;
+    const debuffCount = statuses.filter((s) => s.category === "debuff").length;
+    const instantCount = instantEffects.length;
+    const allCount = statuses.length + instantCount;
+
+    const countAllEl = document.getElementById("count-all");
+    const countBuffsEl = document.getElementById("count-buffs");
+    const countDebuffsEl = document.getElementById("count-debuffs");
+    const countInstantEl = document.getElementById("count-instant");
+
+    if (countAllEl) countAllEl.textContent = allCount;
+    if (countBuffsEl) countBuffsEl.textContent = buffCount;
+    if (countDebuffsEl) countDebuffsEl.textContent = debuffCount;
+    if (countInstantEl) countInstantEl.textContent = instantCount;
+
+    // Filter items
+    let items = [];
+    if (this.statusDrawerFilter === "buff") {
+      items = statuses.filter((s) => s.category === "buff" || s.category === "special");
+    } else if (this.statusDrawerFilter === "debuff") {
+      items = statuses.filter((s) => s.category === "debuff");
+    } else if (this.statusDrawerFilter === "instant") {
+      items = instantEffects;
+    } else {
+      items = [...statuses, ...instantEffects];
+    }
+
+    // Search query filter
+    const query = this.statusDrawerSearch;
+    if (query) {
+      items = items.filter((item) => {
+        const nameMatch = item.name?.toLowerCase().includes(query);
+        const iconMatch = item.icon?.toLowerCase().includes(query);
+        const descMatch = item.description?.toLowerCase().includes(query);
+        const summaryMatch = item.summary?.toLowerCase().includes(query);
+        const tagsMatch = item.tags?.some((t) => t.toLowerCase().includes(query));
+        return nameMatch || iconMatch || descMatch || summaryMatch || tagsMatch;
+      });
+    }
+
+    if (items.length === 0) {
+      cardList.innerHTML = `
+        <div class="drawer-empty-msg">
+          No matching definitions found for "${this.statusDrawerSearch}".
+        </div>
+      `;
+      return;
+    }
+
+    cardList.innerHTML = items
+      .map((item) => {
+        const isInstant = item.category === "instant";
+        const catClass = `cat-${item.category || "debuff"}`;
+        const badgeClass = `badge-${item.category || "debuff"}`;
+        const catLabel = isInstant ? "Instant Effect" : (item.category || "Debuff").toUpperCase();
+
+        if (isInstant) {
+          const tagsHtml = (item.tags || [])
+            .map((t) => `<span class="def-pill">${t}</span>`)
+            .join("");
+          return `
+            <article class="definition-card ${catClass}">
+              <div class="def-card-top">
+                <div class="def-title-wrap">
+                  <span class="def-icon-tag">[${item.icon || "FX"}]</span>
+                  <span class="def-name">${item.name}</span>
+                </div>
+                <span class="def-cat-badge ${badgeClass}">${catLabel}</span>
+              </div>
+              ${item.summary ? `<div class="def-summary">${item.summary}</div>` : ""}
+              <p class="def-desc">${item.description}</p>
+              ${tagsHtml ? `<div class="def-tags-row">${tagsHtml}</div>` : ""}
+            </article>
+          `;
+        }
+
+        // Standard Status Effect
+        const flagsList = [];
+        if (item.flags?.skipTurn) flagsList.push("Skips Turn");
+        if (item.flags?.blockPassives) flagsList.push("Blocks Passives");
+        if (item.flags?.sealItems) flagsList.push("Seals Items & Meter");
+        if (item.flags?.blockRevive) flagsList.push("Blocks Revives");
+        if (item.flags?.removeOnDamage) flagsList.push("Breaks On Direct Damage");
+        if (item.isProtectedByDefault) flagsList.push("Protected / Irremovable");
+
+        if (item.statModifiers) {
+          const m = item.statModifiers;
+          if (m.defPercent != null) flagsList.push(`DEF ${m.defPercent > 0 ? "+" : ""}${m.defPercent}%`);
+          if (m.atkPercent != null) flagsList.push(`ATK ${m.atkPercent > 0 ? "+" : ""}${m.atkPercent}%`);
+          if (m.spdPercent != null) flagsList.push(`SPD ${m.spdPercent > 0 ? "+" : ""}${m.spdPercent}%`);
+          if (m.critRateBuff != null) flagsList.push(`Crit Rate +${m.critRateBuff}%`);
+          if (m.critDmgBuff != null) flagsList.push(`Crit DMG +${m.critDmgBuff}%`);
+          if (m.incomingDamageMultiplier != null) flagsList.push(`DMG Taken x${m.incomingDamageMultiplier}`);
+          if (m.blockDamage) flagsList.push("Damage Immune");
+          if (m.unkillable) flagsList.push("Cannot Drop Below 1 HP");
+          if (m.taunt) flagsList.push("Forces Focus (Taunt)");
+          if (m.counterattack) flagsList.push("Retaliates When Hit");
+          if (m.reflectDamagePercent) flagsList.push(`Reflects ${m.reflectDamagePercent}% DMG`);
+        }
+
+        const pillsHtml = flagsList.map((f) => `<span class="def-pill">${f}</span>`).join("");
+
+        const metaBar = `
+          <div class="def-meta-bar">
+            <span class="def-meta-item">Stacking: <strong>${item.stackBehavior || "none"}</strong></span>
+            <span class="def-meta-item">Max: <strong>${item.maxStacks || 1}</strong></span>
+            <span class="def-meta-item">Ticks: <strong>${item.tickTiming || "N/A"}</strong></span>
+          </div>
+        `;
+
+        return `
+          <article class="definition-card ${catClass}">
+            <div class="def-card-top">
+              <div class="def-title-wrap">
+                <span class="def-icon-tag">[${item.icon || "STATUS"}]</span>
+                <span class="def-name">${item.name}</span>
+              </div>
+              <span class="def-cat-badge ${badgeClass}">${catLabel}</span>
+            </div>
+            ${metaBar}
+            <p class="def-desc">${item.description}</p>
+            ${pillsHtml ? `<div class="def-tags-row">${pillsHtml}</div>` : ""}
+          </article>
         `;
       })
       .join("");

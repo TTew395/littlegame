@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Little Game Test Server</title>
-  <link rel="stylesheet" href="./style.css?v=4" />
+  <link rel="stylesheet" href="./style.css?v=7" />
 </head>
 <body>
   <!-- TOP NAVIGATION BAR -->
@@ -204,6 +204,51 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=6"></script>
+  <!-- =================================================================== -->
+  <!-- SIDE TABS (EXPANDABLE BUFFS / DEBUFFS & INSTANT EFFECTS DOCK)       -->
+  <!-- =================================================================== -->
+  <aside class="side-tab-dock" id="side-tab-dock" aria-label="Status Reference Tabs">
+    <button class="side-tab-btn tab-buffs" id="side-tab-buffs-btn" title="Open Buff Definitions">
+      <span class="side-tab-badge">BUFF</span>
+      <span class="side-tab-text">Buffs</span>
+    </button>
+    <button class="side-tab-btn tab-debuffs" id="side-tab-debuffs-btn" title="Open Debuffs &amp; Instant Effects">
+      <span class="side-tab-badge">DEBUFF</span>
+      <span class="side-tab-text">Debuffs &amp; Effects</span>
+    </button>
+  </aside>
+
+  <!-- =================================================================== -->
+  <!-- SLIDE-OUT OVERLAY DRAWER: BUFFS, DEBUFFS & INSTANT EFFECTS         -->
+  <!-- =================================================================== -->
+  <div id="status-drawer-overlay" class="drawer-overlay hidden" aria-modal="true" role="dialog">
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <div class="drawer-panel" id="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-header-info">
+          <h2 class="drawer-title">Status Codex &amp; Battle Mechanics</h2>
+          <small class="drawer-subtitle">Tactical Definitions for all Buffs, Debuffs, and Instant Effects</small>
+        </div>
+        <button id="close-drawer-btn" class="drawer-close-btn" title="Close Panel" aria-label="Close">✕</button>
+      </div>
+
+      <div class="drawer-filter-bar">
+        <div class="drawer-category-tabs">
+          <button class="drawer-category-btn active" data-filter="all">All (<span id="count-all">0</span>)</button>
+          <button class="drawer-category-btn" data-filter="buff">Buffs (<span id="count-buffs">0</span>)</button>
+          <button class="drawer-category-btn" data-filter="debuff">Debuffs (<span id="count-debuffs">0</span>)</button>
+          <button class="drawer-category-btn" data-filter="instant">Instant Effects (<span id="count-instant">0</span>)</button>
+        </div>
+        <div class="drawer-search-wrap">
+          <input type="text" id="drawer-search-input" placeholder="Search definitions by name, tag, or effect..." class="drawer-search-input" />
+          <button id="drawer-search-clear-btn" class="drawer-search-clear hidden" title="Clear Search">✕</button>
+        </div>
+      </div>
+
+      <div id="drawer-card-list" class="drawer-card-list"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js?v=7"></script>
 </body>
 </html>

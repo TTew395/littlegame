@@ -10,6 +10,7 @@ import { registerAllAbilities } from "./abilities.js?v=6";
 import { registerAllSummons } from "./summons.js?v=6";
 import { registerAllSkills } from "./skills.js?v=6";
 import { registerAllCharacters } from "./characters.js?v=6";
+import { registerAllInstantEffects } from "./instantEffects.js?v=6";
 
 export function initializeGameContent() {
   registerAllStatuses();
@@ -19,4 +20,5 @@ export function initializeGameContent() {
   registerAllSummons();
   registerAllSkills();
   registerAllCharacters();
+  registerAllInstantEffects();
 }
