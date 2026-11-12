@@ -2,10 +2,10 @@
  * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
-import { initializeGameContent } from "./data/index.js?v=12";
+import { initializeGameContent } from "./data/index.js?v=13";
 import { Registry } from "./engine/Registry.js";
-import { BattleEngine } from "./engine/BattleEngine.js?v=12";
-import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=12";
+import { BattleEngine } from "./engine/BattleEngine.js?v=13";
+import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=13";
 
 initializeGameContent();
 
@@ -802,10 +802,19 @@ class GameApp {
     const isInspected = unit.id === this.inspectedUnitId;
     const isDead = unit.currentHp <= 0;
 
-    const currentHpPct = Math.max(0, (unit.currentHp / unit.baseMaxHp) * 100);
-    const shieldPct = Math.min(100, Math.round(((unit.shieldHp || 0) / unit.baseMaxHp) * 100));
-    const magmaPct = Math.min(100, Math.round(((unit.magmaShieldHp || 0) / unit.baseMaxHp) * 100));
-    const destroyedPct = unit.destroyedHpPct || 0;
+    const shieldHp = Math.max(0, unit.shieldHp || 0);
+    const magmaHp = Math.max(0, unit.magmaShieldHp || 0);
+    const destroyedPctRaw = Math.max(0, unit.destroyedHpPct || 0);
+    const destroyedHp = (destroyedPctRaw / 100) * (unit.baseMaxHp || 1);
+    const totalBarPool = Math.max(
+      unit.baseMaxHp || 1,
+      Math.max(0, unit.currentHp) + shieldHp + magmaHp + destroyedHp
+    );
+
+    const currentHpPct = Math.max(0, (unit.currentHp / totalBarPool) * 100);
+    const shieldPct = (shieldHp / totalBarPool) * 100;
+    const magmaPct = (magmaHp / totalBarPool) * 100;
+    const destroyedPct = (destroyedHp / totalBarPool) * 100;
     const energyPct =
       unit.maxEnergy > 0 ? (unit.currentEnergy / unit.maxEnergy) * 100 : 0;
     const tmPct = Math.min(100, Math.round((unit.turnMeter / 1000) * 100));
@@ -876,14 +885,14 @@ class GameApp {
               <strong>${unit.currentHp}</strong> / ${unit.effectiveMaxHp}
               ${(unit.shieldHp || 0) > 0 ? `<span class="hp-shield-val">(+${unit.shieldHp} Shield)</span>` : ""}
               ${(unit.magmaShieldHp || 0) > 0 ? `<span class="hp-magma-val">(+${unit.magmaShieldHp} Magma)</span>` : ""}
-              ${destroyedPct > 0 ? `<small class="destroyed-label">(-${destroyedPct}% Destroyed)</small>` : ""}
+              ${destroyedPctRaw > 0 ? `<small class="destroyed-label">(-${destroyedPctRaw}% Destroyed)</small>` : ""}
             </span>
           </div>
           <div class="hp-bar-track">
-            <div class="hp-bar-fill" style="width:${currentHpPct}%"></div>
-            ${(unit.shieldHp || 0) > 0 ? `<div class="hp-bar-shield" style="width:${shieldPct}%" title="Shield: ${unit.shieldHp}"></div>` : ""}
-            ${(unit.magmaShieldHp || 0) > 0 ? `<div class="hp-bar-magma" style="width:${magmaPct}%" title="Magma Shield: ${unit.magmaShieldHp}"></div>` : ""}
-            ${destroyedPct > 0 ? `<div class="hp-bar-destroyed" style="width:${destroyedPct}%"></div>` : ""}
+            <div class="hp-bar-fill" style="width:${currentHpPct.toFixed(2)}%"></div>
+            ${shieldHp > 0 ? `<div class="hp-bar-shield" style="width:${shieldPct.toFixed(2)}%" title="Shield: ${shieldHp}"></div>` : ""}
+            ${magmaHp > 0 ? `<div class="hp-bar-magma" style="width:${magmaPct.toFixed(2)}%" title="Magma Shield: ${magmaHp}"></div>` : ""}
+            ${destroyedPctRaw > 0 ? `<div class="hp-bar-destroyed" style="width:${destroyedPct.toFixed(2)}%"></div>` : ""}
           </div>
         </div>
 

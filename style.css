@@ -754,12 +754,14 @@ body {
 
 .hp-bar-fill {
   height: 100%;
+  flex-shrink: 0;
   background: linear-gradient(90deg, #10b981, #34d399);
   transition: width 0.25s ease;
 }
 
 .hp-bar-shield {
   height: 100%;
+  flex-shrink: 0;
   background: linear-gradient(90deg, #0284c7, #38bdf8);
   box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
   transition: width 0.25s ease;
@@ -767,6 +769,7 @@ body {
 
 .hp-bar-magma {
   height: 100%;
+  flex-shrink: 0;
   background: linear-gradient(90deg, #ea580c, #f97316);
   box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
   transition: width 0.25s ease;
@@ -798,6 +801,7 @@ body {
 
 .hp-bar-destroyed {
   height: 100%;
+  flex-shrink: 0;
   background: repeating-linear-gradient(
     45deg,
     #450a0a,

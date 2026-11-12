@@ -7,8 +7,8 @@
  */
 
 import { Registry } from "./Registry.js";
-import { StatusManager } from "./StatusManager.js?v=12";
-import { DamagePipeline } from "./DamagePipeline.js?v=12";
+import { StatusManager } from "./StatusManager.js?v=13";
+import { DamagePipeline } from "./DamagePipeline.js?v=13";
 
 function createSeededRng(seed = Date.now()) {
   let a = seed >>> 0;
@@ -653,6 +653,7 @@ export class BattleEngine {
     ) {
       if (!target.customCounters) target.customCounters = {};
       target.customCounters.luckActiveCooldown = 3;
+      target._evadedSkillViaPassive = true;
       this.logPassive(
         `[LUCK IS ON MY SIDE] John-117 evades massive damage (${amount} > 30% MAX HP) and takes an Instant Turn!`
       );
@@ -693,7 +694,8 @@ export class BattleEngine {
       return 0;
     }
 
-    let remaining = Math.max(1, Math.round(amount));
+    const fullDamage = Math.max(1, Math.round(amount));
+    let remaining = fullDamage;
     const skipShields = bypassShieldsAndBlocks || bypassShields;
 
     if (!skipShields && (this.communalShields[target.teamId] || 0) > 0) {
@@ -710,7 +712,7 @@ export class BattleEngine {
           { isSkill: false }
         );
       }
-      if (remaining <= 0) return 0;
+      if (remaining <= 0) return fullDamage;
     }
 
     if (!skipShields && (target.magmaShieldHp || 0) > 0 && remaining > 0) {
@@ -737,7 +739,7 @@ export class BattleEngine {
           `${target.name}'s Magma Shield Reflect (100%)`
         );
       }
-      if (remaining <= 0) return 0;
+      if (remaining <= 0) return fullDamage;
     }
 
     if (!skipShields && (target.shieldHp || 0) > 0) {
@@ -755,7 +757,7 @@ export class BattleEngine {
           isSkill: false,
         });
       }
-      if (remaining <= 0) return 0;
+      if (remaining <= 0) return fullDamage;
     }
 
     // Fred-104 Defensive Bulwark: intercepts 25% (or 50% with 1 Spartan Ally) damage for allies
@@ -769,18 +771,18 @@ export class BattleEngine {
         const sharedDmg = Math.floor(remaining * sharePct);
         if (sharedDmg > 0) {
           remaining -= sharedDmg;
-          this.applyCalculatedDamage(fred, sharedDmg, {
-            attacker,
-            skill,
-            isRedirectedDamage: true,
-            silentShields: Boolean(target._inSkillHitLoop),
-          });
 
           if (target._inSkillHitLoop) {
             target._fredSharedDamageThisSkill =
               (target._fredSharedDamageThisSkill || 0) + sharedDmg;
             target._fredInterceptorUnit = fred;
           } else {
+            this.applyCalculatedDamage(fred, sharedDmg, {
+              attacker,
+              skill,
+              isRedirectedDamage: true,
+              silentShields: false,
+            });
             this.logPassive(
               `[Defensive Bulwark] Fred-104 intercepts ${sharedDmg} damage (${Math.round(sharePct * 100)}%) for ${target.name}!`
             );
@@ -821,7 +823,8 @@ export class BattleEngine {
     }
 
     if (target.templateId === "theridine_great_septimus") {
-      return this.applyDamageToTheridine(target, remaining, attacker);
+      this.applyDamageToTheridine(target, remaining, attacker);
+      return fullDamage;
     }
 
     const oldHpPct = (target.currentHp / target.effectiveMaxHp) * 100;
@@ -859,31 +862,31 @@ export class BattleEngine {
     target.currentHp -= actual;
     const newHpPct = (target.currentHp / target.effectiveMaxHp) * 100;
 
-    if (sourceLabel && actual > 0) {
-      this.log(`${target.name} takes ${actual} damage from ${sourceLabel}.`, "damage");
+    if (sourceLabel && remaining > 0) {
+      this.log(`${target.name} takes ${remaining} damage from ${sourceLabel}.`, "damage");
     }
 
     // Linda-034 Pinpoint Accuracy Lifesteal (25% damage healed) — aggregated per target when in multi-hit loop
     if (
       !target._inSkillHitLoop &&
       attacker &&
-      actual > 0 &&
+      fullDamage > 0 &&
       this.hasAbilityFlag(attacker, "healOnDamageDealtPct")
     ) {
       const pct = this.getAbilityFlagValue(attacker, "healOnDamageDealtPct") || 0.25;
-      const lifesteal = Math.max(1, Math.floor(actual * pct));
+      const lifesteal = Math.max(1, Math.floor(fullDamage * pct));
       this.healUnit(attacker, lifesteal, `${attacker.name}'s Pinpoint Accuracy Lifesteal`, {
         isPassive: true,
       });
     }
 
     // Kelly-087 Guarded and Ready: Whenever an ally under a Shield takes damage, heal 50% — aggregated per target when in multi-hit loop
-    if (!target._inSkillHitLoop && actual > 0 && (target.shieldHp || 0) > 0) {
+    if (!target._inSkillHitLoop && fullDamage > 0 && (target.shieldHp || 0) > 0) {
       const kelly = this.getLivingAlliesOf(target).find((a) =>
         this.hasAbilityFlag(a, "guardedReadyShieldEcho")
       );
       if (kelly) {
-        const echoHeal = Math.max(1, Math.floor(actual * 0.5));
+        const echoHeal = Math.max(1, Math.floor(fullDamage * 0.5));
         this.healUnit(target, echoHeal, "Guarded and Ready Shield Echo", {
           isPassive: true,
         });
@@ -937,15 +940,15 @@ export class BattleEngine {
         holder: target,
         attacker,
         skill,
-        damageTaken: actual,
+        damageTaken: fullDamage,
         engine: this,
       });
     }
 
-    if (target.templateId === "first_genius_zander" && actual > 0) {
+    if (target.templateId === "first_genius_zander" && fullDamage > 0) {
       if (target.form === "evolution") {
         target.customCounters.evolutionDamageTaken =
-          (target.customCounters.evolutionDamageTaken || 0) + actual;
+          (target.customCounters.evolutionDamageTaken || 0) + fullDamage;
       }
       if (target.currentHp > 0) {
         this.checkZanderHpThresholds(target, oldHpPct, newHpPct);
@@ -955,12 +958,11 @@ export class BattleEngine {
     if (target.currentHp <= 0) {
       this.handleUnitDeath(target, attacker);
     }
-    return actual;
+    return fullDamage;
   }
 
   applyDamageToTheridine(theridine, damageAmount, attacker) {
     let dmgLeft = damageAmount;
-    let totalDealt = 0;
     const atkVal = this.getEffectiveStats(theridine).atk;
     const enemyTeamId = theridine.teamId === 1 ? 2 : 1;
 
@@ -968,7 +970,6 @@ export class BattleEngine {
       if (dmgLeft >= theridine.currentHp) {
         const consumed = theridine.currentHp;
         dmgLeft -= consumed;
-        totalDealt += consumed;
 
         if ((theridine.customCounters.chargingBarsRemaining || 0) > 0) {
           theridine.customCounters.chargingBarsRemaining -= 1;
@@ -1010,11 +1011,10 @@ export class BattleEngine {
         }
       } else {
         theridine.currentHp -= dmgLeft;
-        totalDealt += dmgLeft;
         dmgLeft = 0;
       }
     }
-    return totalDealt;
+    return damageAmount;
   }
 
   checkZanderHpThresholds(zander, oldPct, newPct) {
@@ -2066,6 +2066,7 @@ export class BattleEngine {
           target._weakHitLoggedThisSkill = false;
           target._fredSharedDamageThisSkill = 0;
           target._fredInterceptorUnit = null;
+          target._evadedSkillViaPassive = false;
 
           if (typeof skill.onBeforeAttack === "function") {
             skill.onBeforeAttack({ attacker, target, engine: this });
@@ -2087,7 +2088,7 @@ export class BattleEngine {
               this.statusManager.hasStatus(target, "hex"));
 
           for (let h = 0; h < hits; h++) {
-            if (target.currentHp <= 0 || target._justRevivedProtectThisSkill) break;
+            if (target._justRevivedProtectThisSkill || target._evadedSkillViaPassive) break;
 
             const ignoreDefPct =
               typeof skill.getIgnoreDefPct === "function"
@@ -2104,14 +2105,24 @@ export class BattleEngine {
                 isFreeCounter,
               });
 
-            const dealt = this.applyCalculatedDamage(target, damage, {
-              attacker,
-              skill,
-              bypassShieldsAndBlocks,
-              bypassShields: Boolean(skill.bypassShields),
-              bypassUnkillable: Boolean(skill.bypassUnkillable),
-              silentShields: true,
-            });
+            let dealt = damage;
+            if (target.currentHp > 0) {
+              dealt = this.applyCalculatedDamage(target, damage, {
+                attacker,
+                skill,
+                bypassShieldsAndBlocks,
+                bypassShields: Boolean(skill.bypassShields),
+                bypassUnkillable: Boolean(skill.bypassUnkillable),
+                silentShields: true,
+              });
+              if (target._evadedSkillViaPassive) break;
+            } else if (
+              !bypassShieldsAndBlocks &&
+              this.statusManager.hasFlag(target, "blockDamage")
+            ) {
+              dealt = 0;
+            }
+
             totalDamageToTarget += dealt;
             perHitAmounts.push(isCrit ? `${dealt}!` : `${dealt}`);
             if (isCrit) critHitsCount += 1;
@@ -2180,28 +2191,49 @@ export class BattleEngine {
           }
 
           target._inSkillHitLoop = false;
+          delete target._evadedSkillViaPassive;
 
           // Emit aggregated once-per-target passive & shield reactions:
           if (target._fredSharedDamageThisSkill > 0 && target._fredInterceptorUnit) {
             const fred = target._fredInterceptorUnit;
             const shared = target._fredSharedDamageThisSkill;
-            const spartanCount = this.countOtherLivingSpartanAllies(fred);
+            const spartanCount = this.getSpartanAlliesCount(fred);
             this.logPassive(
               `[${fred.name}] [Defensive Bulwark] intercepts ${shared} DMG for ${target.name}!`
             );
             this.applyCalculatedDamage(fred, shared, {
               attacker,
               skill,
-              isRedirected: true,
+              isRedirectedDamage: true,
               silentShields: false,
             });
+            if (fred.currentHp > 0) {
+              const fredDefHealPct = spartanCount >= 1 ? 0.45 : 0.2;
+              const fredHealAmt = Math.max(
+                1,
+                Math.floor(this.getEffectiveStats(fred).def * fredDefHealPct)
+              );
+              this.healUnit(fred, fredHealAmt, "Defensive Bulwark Regeneration", {
+                isPassive: true,
+              });
+            }
             if (spartanCount >= 2 && fred.currentHp > 0) {
-              const fredDef = this.getEffectiveStats(fred).def;
-              const shieldAmt = Math.max(10, Math.round(fredDef * 2.5));
-              this.grantShield(fred, shieldAmt, "Defensive Bulwark");
+              const sVal = Math.floor(3.0 * this.getEffectiveStats(fred).def);
+              fred.shieldHp = (fred.shieldHp || 0) + sVal;
+              this.statusManager.applyStatus(fred, fred, "shield", {
+                duration: 2,
+                silent: true,
+              });
               if (target.currentHp > 0) {
-                this.grantShield(target, shieldAmt, "Defensive Bulwark");
+                target.shieldHp = (target.shieldHp || 0) + sVal;
+                this.statusManager.applyStatus(fred, target, "shield", {
+                  duration: 2,
+                  silent: true,
+                });
               }
+              this.logPassive(
+                `[Defensive Bulwark] ${fred.name} grants +${sVal} [Shield] (2T) to himself and ${target.name}.`
+              );
             }
             if (
               spartanCount >= 3 &&
@@ -2235,7 +2267,7 @@ export class BattleEngine {
 
           if (totalDamageToTarget > 0 && target.currentHp > 0 && (target.shieldHp || 0) > 0) {
             const kelly = this.getLivingAlliesOf(target).find((u) =>
-              this.hasAbilityFlag(u, "kellyShieldHeal")
+              this.hasAbilityFlag(u, "guardedReadyShieldEcho")
             );
             if (kelly) {
               const echoHeal = Math.max(1, Math.round(totalDamageToTarget * 0.5));
