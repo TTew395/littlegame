@@ -51,9 +51,8 @@ export const ABILITY_LIST = [
           unit.customCounters._microGuardKey = guardKey;
           if (engine.rng() < 0.2) {
             result *= 0.5;
-            engine.log(
-              `[${unit.name}] Micro Jackson reduces incoming damage to ${defender.name} by 50%!`,
-              "special"
+            engine.logPassive(
+              `[${unit.name}] Micro Jackson reduces incoming damage to ${defender.name} by 50%!`
             );
           }
         }
@@ -113,9 +112,8 @@ export const ABILITY_LIST = [
           0.6,
           Math.round((prev + 0.2) * 100) / 100
         );
-        engine.log(
-          `[${unit.name}] Yautja Cloak: slaying ${victim.name} permanently increases Evasion by +20% (Kill Bonus: ${Math.round(unit.customCounters.killEvasionBonus * 100)}%).`,
-          "special"
+        engine.logPassive(
+          `[${unit.name}] Yautja Cloak: slaying ${victim.name} permanently increases Evasion by +20% (Kill Bonus: ${Math.round(unit.customCounters.killEvasionBonus * 100)}%).`
         );
       }
     },
@@ -177,12 +175,10 @@ export const ABILITY_LIST = [
       solanar.magmaShieldHp = (solanar.magmaShieldHp || 0) + magmaShieldVal;
       engine.statusManager.applyStatus(solanar, solanar, "magma_shield", {
         duration: 3,
-        isProtected: true,
       });
       solanar.turnMeter = 1000;
-      engine.log(
-        `[${solanar.name}] Scholar of Sun activates! With all allies fallen, ${solanar.name} revives with ${solanar.currentHp} HP (75% MAX HP), ${solanar.currentEnergy} Energy (75% MAX EN), a ${magmaShieldVal} HP [Magma Shield] (100% Reflect), and an Instant Turn!`,
-        "special"
+      engine.logPassive(
+        `[${solanar.name}] Scholar of Sun activates! With all allies fallen, ${solanar.name} revives with ${solanar.currentHp} HP (75% MAX HP), ${solanar.currentEnergy} Energy (75% MAX EN), a ${magmaShieldVal} HP [Magma Shield] (100% Reflect), and an Instant Turn!`
       );
       engine.grantExtraTurn(solanar, { suppressReactions: true });
       return true;
@@ -199,9 +195,8 @@ export const ABILITY_LIST = [
       if (remainingLivingAllies.length === 0) {
         this.tryReviveSolanar({ solanar: unit, engine });
       } else {
-        engine.log(
-          `[${unit.name}] Scholar of Sun is dormant — ${unit.name} will revive at 75% HP & 75% Energy with an Instant Turn when the last living ally falls.`,
-          "special"
+        engine.logPassive(
+          `[${unit.name}] Scholar of Sun is dormant — ${unit.name} will revive at 75% HP & 75% Energy with an Instant Turn when the last living ally falls.`
         );
       }
     },
@@ -370,9 +365,8 @@ export const ABILITY_LIST = [
       if (engine.statusManager.hasStatus(attacker, "glory")) {
         engine.statusManager.addStacks(attacker, "glory", 1);
         gloryReduction = engine.statusManager.getStacks(attacker, "glory");
-        engine.log(
-          `${attacker.name}'s Glory rises to ${gloryReduction} stack(s).`,
-          "status"
+        engine.logPassive(
+          `${attacker.name}'s Glory rises to ${gloryReduction} stack(s).`
         );
       }
 
@@ -382,9 +376,8 @@ export const ABILITY_LIST = [
         engine.statusManager.setStatusStacks(defender, "war_armor", newStacks, {
           isProtected: true,
         });
-        engine.log(
-          `${defender.name}'s War Armor loses ${currentArmor - newStacks} stack(s) -> ${newStacks} remaining.`,
-          "status"
+        engine.logPassive(
+          `${defender.name}'s War Armor loses ${currentArmor - newStacks} stack(s) -> ${newStacks} remaining.`
         );
 
         if (newStacks === 0) {
@@ -392,9 +385,8 @@ export const ABILITY_LIST = [
           engine.dealTrueDamage(defender, shatterDmg, "War Armor Depletion (10% MAX HP)");
           engine.modifyTurnMeter(defender, -0.2, { bypassImmunity: true });
           engine.clearGlobalStatus("glory");
-          engine.log(
-            `[SHATTER] ${defender.name}'s War Armor depleted! Took ${shatterDmg} damage, action delayed by 20%, and all Glory stacks vanished.`,
-            "crit"
+          engine.logPassive(
+            `[SHATTER] ${defender.name}'s War Armor depleted! Took ${shatterDmg} damage, action delayed by 20%, and all Glory stacks vanished.`
           );
         }
       } else {
@@ -456,9 +448,8 @@ export const ABILITY_LIST = [
       if (aliveSpawns.length < 4) {
         defender.customCounters.spawnedThisTurn = true;
         engine.spawnSwarmMinion(defender.teamId);
-        engine.log(
-          `[${defender.name}] Brood Queen spawns a Swarm Spawn in response to the attack.`,
-          "special"
+        engine.logPassive(
+          `[${defender.name}] Brood Queen spawns a Swarm Spawn in response to the attack.`
         );
       }
     },
@@ -615,9 +606,8 @@ export const ABILITY_LIST = [
           (defender.customCounters.chargingCounters || 0) + 1
         );
         const penaltyPct = defender.customCounters.chargingCounters * 5;
-        engine.log(
-          `[${defender.name}] counters from Ten Thousand Years Silent with [Sweep the Field]! (Next Flectere damage reduced by ${penaltyPct}%)`,
-          "special"
+        engine.logPassive(
+          `[${defender.name}] counters from Ten Thousand Years Silent with [Sweep the Field]! (Next Flectere damage reduced by ${penaltyPct}%)`
         );
         engine.executeCounterSkill(defender, "sweep_the_field");
       } else {

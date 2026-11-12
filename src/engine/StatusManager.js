@@ -108,10 +108,8 @@ export class StatusManager {
           source.teamId !== target.teamId &&
           this.engine.hasAbilityFlag(target, "counterOnSpdDownAttempt")
         ) {
-          this.engine.log(
-            `[${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`,
-            "special",
-            { isSkill: false }
+          this.engine.logPassive(
+            `[Passive] [${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`
           );
           this.engine.executeCounterSkill(target, "auric_lance", source.id);
         }
@@ -217,6 +215,11 @@ export class StatusManager {
         }
         existing.isProtected = existing.isProtected || protectedFlag;
       }
+      existing.placedOnTurn = this.engine.turnNumber;
+      existing.placedOnActiveUnitId = this.engine.activeUnitId;
+      if (typeof def.onStackAdded === "function") {
+        def.onStackAdded({ unit: target, stacks: existing.stacks, engine: this.engine });
+      }
     } else {
       target.statuses.push({
         id: statusId,
@@ -230,7 +233,12 @@ export class StatusManager {
             : 1,
         duration: def.tickTiming === "NEVER" ? null : effectiveDuration,
         isProtected: protectedFlag,
+        placedOnTurn: this.engine.turnNumber,
+        placedOnActiveUnitId: this.engine.activeUnitId,
       });
+      if (typeof def.onApply === "function") {
+        def.onApply({ unit: target, source, engine: this.engine });
+      }
     }
 
     if (!silent) {
@@ -311,6 +319,7 @@ export class StatusManager {
   }
 
   removeStatus(target, statusId, { forceProtected = false } = {}) {
+    if (!target || !target.statuses) return;
     target.statuses = target.statuses.filter((s) => {
       if (s.id !== statusId) return true;
       if (s.isProtected && !forceProtected) return true;
@@ -319,6 +328,122 @@ export class StatusManager {
     if (statusId === "shield") {
       target.shieldHp = 0;
     }
+    if (statusId === "magma_shield") {
+      target.magmaShieldHp = 0;
+    }
+    if (statusId === "stone_skin" && !this.hasStatus(target, "shield")) {
+      target.shieldHp = 0;
+    }
+  }
+
+  /**
+   * Removes all active buffs from target unless otherwise specified via onlyIds/excludeIds/count.
+   */
+  removeBuffs(
+    target,
+    { onlyIds = null, excludeIds = null, count = null, includeProtected = false, silent = false } = {}
+  ) {
+    if (!target || !target.statuses) return [];
+    const intrinsicBossBuffs = new Set([
+      "war_armor",
+      "brood_atk_boost",
+      "forever_waiting_guard",
+    ]);
+    const removable = target.statuses.filter((s) => {
+      if (s.category !== "buff") return false;
+      if (intrinsicBossBuffs.has(s.id) && !includeProtected) return false;
+      if (s.isProtected && !includeProtected) return false;
+      if (Array.isArray(onlyIds) && !onlyIds.includes(s.id)) return false;
+      if (Array.isArray(excludeIds) && excludeIds.includes(s.id)) return false;
+      return true;
+    });
+
+    const toRemove =
+      typeof count === "number" && count > 0 ? removable.slice(0, count) : removable;
+    if (toRemove.length === 0) return [];
+
+    const removedIds = new Set(toRemove.map((b) => b.id));
+    target.statuses = target.statuses.filter((s) => !removedIds.has(s.id));
+
+    if (removedIds.has("shield") || (removedIds.has("stone_skin") && !this.hasStatus(target, "shield"))) {
+      target.shieldHp = 0;
+    }
+    if (removedIds.has("magma_shield")) {
+      target.magmaShieldHp = 0;
+    }
+
+    if (!silent) {
+      const names = toRemove.map((b) => `[${b.name}]`).join(", ");
+      this.engine.log(`Removed ${toRemove.length} buff(s) from ${target.name}: ${names}.`, "status", {
+        isSkill: false,
+      });
+    }
+    return toRemove;
+  }
+
+  /**
+   * Steals all active buffs from target onto source unless otherwise specified via onlyIds/excludeIds/count.
+   * Transfers Shield and Magma Shield values and marks stolen buffs so they do not decrement on the turn stolen.
+   */
+  stealBuffs(
+    source,
+    target,
+    { onlyIds = null, excludeIds = null, count = null, includeProtected = false, silent = false } = {}
+  ) {
+    if (!source || !target || !target.statuses) return [];
+    const intrinsicBossBuffs = new Set([
+      "war_armor",
+      "brood_atk_boost",
+      "forever_waiting_guard",
+    ]);
+    const stealable = target.statuses.filter((s) => {
+      if (s.category !== "buff") return false;
+      if (intrinsicBossBuffs.has(s.id) && !includeProtected) return false;
+      if (s.isProtected && !includeProtected) return false;
+      if (Array.isArray(onlyIds) && !onlyIds.includes(s.id)) return false;
+      if (Array.isArray(excludeIds) && excludeIds.includes(s.id)) return false;
+      return true;
+    });
+
+    const toSteal =
+      typeof count === "number" && count > 0 ? stealable.slice(0, count) : stealable;
+    if (toSteal.length === 0) return [];
+
+    const stolenIds = new Set(toSteal.map((b) => b.id));
+
+    // Transfer Shield / Magma Shield HP before removing from target
+    if (
+      (stolenIds.has("shield") || stolenIds.has("stone_skin")) &&
+      (target.shieldHp || 0) > 0
+    ) {
+      source.shieldHp = (source.shieldHp || 0) + target.shieldHp;
+      target.shieldHp = 0;
+    }
+    if (stolenIds.has("magma_shield") && (target.magmaShieldHp || 0) > 0) {
+      source.magmaShieldHp = (source.magmaShieldHp || 0) + target.magmaShieldHp;
+      target.magmaShieldHp = 0;
+    }
+
+    target.statuses = target.statuses.filter((s) => !stolenIds.has(s.id));
+
+    for (const b of toSteal) {
+      this.applyStatus(source, source, b.id, {
+        duration: b.duration !== null && b.duration !== undefined ? b.duration : 2,
+        stacks: b.stacks || 1,
+        isProtected: Boolean(b.isProtected),
+        silent: true,
+      });
+    }
+
+    if (!silent) {
+      const names = toSteal.map((b) => `[${b.name}]`).join(", ");
+      this.engine.log(
+        `${source.name} steals ${toSteal.length} buff(s) from ${target.name}: ${names}!`,
+        "special",
+        { isSkill: false }
+      );
+    }
+    return toSteal;
   }
 
   cleanseOneDebuff(target) {
@@ -451,23 +576,33 @@ export class StatusManager {
       }
 
       // Determine effective duration decrement timing:
-      // 1. Buffs and debuffs that boost or decrease stats (Increase/Decrease DEF, ATK, SPD, C. Rate, C. DMG, etc.)
-      //    decrement strictly after the turn ends (timing === "TURN_END").
-      // 2. Buffs and debuffs that deal damage or heal (Continuous Heal, Burn, Bleed, Poison, etc.)
-      //    tick and decrement when the turn starts (timing === "TURN_START").
+      // 1. All buffs (category === "buff") and stat-modifying debuffs decrement strictly AFTER
+      //    the character takes their turn (timing === "TURN_END").
+      // 2. Debuffs that deal damage at turn start (Burn, Bleed, Poison, etc.) decrement at "TURN_START".
       let effectiveTiming = def.tickTiming;
-      if (this.isStatModifierStatus(def)) {
+      if (def.category === "buff" || st.category === "buff" || this.isStatModifierStatus(def)) {
         effectiveTiming = "TURN_END";
       } else if (this.isDamageOrHealStatus(def)) {
         effectiveTiming = "TURN_START";
       }
 
       if (effectiveTiming === timing) {
+        // Do not decrease duration on the turn the status/buff was placed or stolen onto the active unit
+        if (
+          timing === "TURN_END" &&
+          st.placedOnTurn === this.engine.turnNumber &&
+          st.placedOnActiveUnitId === unit.id
+        ) {
+          remaining.push(st);
+          continue;
+        }
         st.duration -= 1;
         if (st.duration > 0) {
           remaining.push(st);
         } else {
-          if (st.id === "shield") unit.shieldHp = 0;
+          if (st.id === "shield" || (st.id === "stone_skin" && !this.hasStatus(unit, "shield"))) {
+            unit.shieldHp = 0;
+          }
           if (st.id === "magma_shield") unit.magmaShieldHp = 0;
           this.engine.log(`[${st.name}] wore off from ${unit.name}.`, "info", {
             isSkill: false,

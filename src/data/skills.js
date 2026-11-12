@@ -489,11 +489,11 @@ export const SKILL_LIST = [
         .filter((a) => a.templateId === "swarm_spawn");
       if (spawns.length > 0) {
         engine.log(
-          `[${attacker.name}] teams up with ${spawns.length} Swarm Spawn(s) to unleash Swarm Ensemble.`,
-          "special"
+          `[Ally Attack] [${attacker.name}] teams up with ${spawns.length} Swarm Spawn(s) to unleash Swarm Ensemble.`,
+          "ally_attack"
         );
         spawns.forEach((sp) => {
-          engine.executeCounterSkill(sp, "swarm_ensemble_minion");
+          engine.executeAllySkill(sp, "swarm_ensemble_minion");
         });
       }
     },
@@ -633,10 +633,14 @@ export const SKILL_LIST = [
         const allyAtk = engine.getEffectiveStats(ally).atk;
         const shieldBonus = (ally.shieldHp || 0) * 0.1;
         const dmg = Math.max(1, Math.round(allyAtk + shieldBonus));
-        engine.dealTrueDamage(
-          target,
-          dmg,
-          `${ally.name} Team-Up (+10% Shield Bonus)`
+        const dealt = engine.applyCalculatedDamage(target, dmg, {
+          attacker: ally,
+          bypassShieldsAndBlocks: false,
+        });
+        engine.log(
+          `[Ally Attack] ${ally.name} [Walker Among Graves Team-Up] -> ${target.name}: ${dealt} DMG`,
+          "ally_attack",
+          { isSkill: true }
         );
       });
     },
@@ -1503,8 +1507,18 @@ export const SKILL_LIST = [
     onEachHit({ target }) {
       if (target.currentHp <= 0) return;
       target.statuses.forEach((st) => {
-        if (st.category === "buff" && st.duration !== null && st.duration > 0) {
+        if (st.category === "buff" && !st.isProtected && st.duration !== null && st.duration > 0) {
           st.duration = Math.max(0, st.duration - 1);
+          if (st.duration === 0) {
+            if (st.id === "shield") {
+              target.shieldHp = 0;
+              target._kellyShieldActive = false;
+            } else if (st.id === "stone_skin" && !target.statuses.some((s) => s.id === "shield" && s.duration > 0)) {
+              target.shieldHp = 0;
+            } else if (st.id === "magma_shield") {
+              target.magmaShieldHp = 0;
+            }
+          }
         }
       });
       target.statuses = target.statuses.filter(
@@ -1676,11 +1690,12 @@ export const SKILL_LIST = [
     },
     onAfterHit({ attacker, target, engine }) {
       if (target.currentHp > 0 && attacker.currentHp > 0) {
-        engine.log(
-          `[${attacker.name}] Target survived Alpha Predator -> Instantly activates [Smart Disk]!`,
-          "special"
+        engine.executeFollowUpSkill(
+          attacker,
+          "smart_disk",
+          target.id,
+          `[${attacker.name}] Target survived Alpha Predator -> Instantly activates [Smart Disk]!`
         );
-        engine.executeCounterSkill(attacker, "smart_disk");
       }
     },
   },
@@ -1720,25 +1735,7 @@ export const SKILL_LIST = [
     description:
       "Attacks 1 enemy. Before attacking, steals all buffs from the target (cannot be resisted).",
     onBeforeAttack({ attacker, target, engine }) {
-      const stolen = target.statuses.filter(
-        (s) => s.category === "buff" && !s.isProtected
-      );
-      if (stolen.length > 0) {
-        target.statuses = target.statuses.filter(
-          (s) => !(s.category === "buff" && !s.isProtected)
-        );
-        stolen.forEach((b) => {
-          engine.statusManager.applyStatus(attacker, attacker, b.id, {
-            duration: b.duration || 2,
-            stacks: b.stacks || 1,
-            silent: true,
-          });
-        });
-        engine.log(
-          `[${attacker.name}] Blazing Force steals ${stolen.length} buff(s) from ${target.name}!`,
-          "special"
-        );
-      }
+      engine.statusManager.stealBuffs(attacker, target);
     },
     computeRawHit({ stats }) {
       return 3.0 * stats.atk;
@@ -2246,15 +2243,21 @@ export const SKILL_LIST = [
     },
     onAfterAttack({ attacker, target, critHitsCount, engine, isRepeat }) {
       if (critHitsCount > 0 && !isRepeat && target && target.currentHp > 0) {
-        engine.log(
-          `[Direct Shot] Critical hit landed! John-117 immediately repeats Direct Shot!`,
-          "special"
-        );
-        engine.runSkillResolution(
-          attacker,
-          { ...this, hits: 2, _isRepeat: true },
-          target.id,
-          { isFreeCounter: true, isTeamUp: true }
+        const repeatSkill = { ...this, hits: 2, _isRepeat: true };
+        engine.queueFollowUpAttack(
+          () => {
+            if (attacker.currentHp <= 0 || target.currentHp <= 0) return;
+            engine.log(
+              `[Normal Attack] [Direct Shot] Critical hit landed! ${attacker.name} repeats [Direct Shot]!`,
+              "normal_attack"
+            );
+            engine.runSkillResolution(attacker, repeatSkill, target.id, {
+              isFreeCounter: false,
+              isTeamUp: false,
+              isRepeatAttack: true,
+            });
+          },
+          { category: "bonus", dedupKey: `repeat:${attacker.id}:direct_shot` }
         );
       }
     },
@@ -2313,17 +2316,7 @@ export const SKILL_LIST = [
     onBeforeAttack({ attacker, target, engine }) {
       const spartanCount = engine.getSpartanAlliesCount(attacker);
       if (spartanCount >= 1 && target && target.statuses) {
-        const stolenBuffs = target.statuses.filter((s) => s.category === "buff" && !s.isProtected);
-        for (const b of stolenBuffs) {
-          engine.statusManager.removeStatus(target, b.id, { forceProtected: true });
-          engine.statusManager.applyStatus(attacker, attacker, b.id, { duration: b.duration || 2 });
-        }
-        if (stolenBuffs.length > 0) {
-          engine.log(
-            `[Spartan Unity] ${attacker.name} steals ${stolenBuffs.length} buffs from ${target.name}!`,
-            "special"
-          );
-        }
+        engine.statusManager.stealBuffs(attacker, target);
       }
     },
     getIgnoreDefPct({ attacker, target, engine }) {
@@ -2645,11 +2638,12 @@ export const SKILL_LIST = [
           engine.statusManager.applyStatus(attacker, target, "block_revive", { isProtected: true });
         }
         if (spartanCount >= 3) {
-          engine.log(
-            `[Spartan Unity] Death from Afar secures kill: Linda-034 instantly activates [No More Hiding]!`,
-            "special"
+          engine.executeFollowUpSkill(
+            attacker,
+            "no_more_hiding",
+            null,
+            `[Spartan Unity] Death from Afar secures kill: ${attacker.name} instantly activates [No More Hiding]!`
           );
-          engine.executeCounterSkill(attacker, "no_more_hiding");
         }
       }
     },
@@ -2673,13 +2667,7 @@ export const SKILL_LIST = [
       const spartanCount = engine.getSpartanAlliesCount(attacker);
       if (spartanCount >= 1) {
         for (const enemy of engine.getLivingEnemiesOf(attacker)) {
-          const stolenBuffs = (enemy.statuses || []).filter(
-            (s) => s.category === "buff" && !s.isProtected
-          );
-          for (const b of stolenBuffs) {
-            engine.statusManager.removeStatus(enemy, b.id, { forceProtected: true });
-            engine.statusManager.applyStatus(attacker, attacker, b.id, { duration: b.duration || 2 });
-          }
+          engine.statusManager.stealBuffs(attacker, enemy);
         }
       }
     },

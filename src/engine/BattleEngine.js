@@ -7,8 +7,8 @@
  */
 
 import { Registry } from "./Registry.js";
-import { StatusManager } from "./StatusManager.js?v=10";
-import { DamagePipeline } from "./DamagePipeline.js?v=10";
+import { StatusManager } from "./StatusManager.js?v=11";
+import { DamagePipeline } from "./DamagePipeline.js?v=11";
 
 function createSeededRng(seed = Date.now()) {
   let a = seed >>> 0;
@@ -37,6 +37,7 @@ export class BattleEngine {
     this.nextInstanceCounter = 1;
 
     this.communalShields = { 1: 0, 2: 0 };
+    this._resolutionStack = [];
 
     this.statusManager = new StatusManager(this);
     this.damagePipeline = new DamagePipeline(this);
@@ -44,6 +45,12 @@ export class BattleEngine {
     if (team1Config.length > 0 || team2Config.length > 0) {
       this.initTeams(team1Config, team2Config);
     }
+  }
+
+  currentResolutionFrame() {
+    return this._resolutionStack.length > 0
+      ? this._resolutionStack[this._resolutionStack.length - 1]
+      : null;
   }
 
   log(message, type = "info", { isSkill = false } = {}) {
@@ -55,8 +62,33 @@ export class BattleEngine {
       isSkill: Boolean(isSkill),
     };
     this.logs.push(entry);
-    if (this.logs.length > 160) {
+    if (this.logs.length > 220) {
       this.logs.shift();
+    }
+  }
+
+  logPassive(message) {
+    const formatted = message.startsWith("[Passive]")
+      ? message
+      : `[Passive] ${message}`;
+    const frame = this.currentResolutionFrame();
+    if (frame && frame.phase === "attack") {
+      frame.passiveLogs.push(formatted);
+    } else {
+      this.log(formatted, "passive", { isSkill: false });
+    }
+  }
+
+  queueFollowUpAttack(fn, { category = "counterattack", dedupKey = null } = {}) {
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      if (dedupKey) {
+        if (frame.dedupKeys.has(dedupKey)) return;
+        frame.dedupKeys.add(dedupKey);
+      }
+      frame.followUpQueue.push({ fn, category });
+    } else {
+      fn();
     }
   }
 
@@ -163,9 +195,8 @@ export class BattleEngine {
         this.hasAbilityFlag(e, "counterOnEnemyFormSwitch")
       );
       for (const marius of opposingMariusList) {
-        this.log(
-          `[${marius.name}] Steadfast Knight reacts to ${unit.name} switching Forms and counterattacks with [Auric Lance]!`,
-          "special"
+        this.logPassive(
+          `[${marius.name}] Steadfast Knight reacts to ${unit.name} switching Forms and counterattacks with [Auric Lance]!`
         );
         this.executeCounterSkill(marius, "auric_lance", unit.id);
       }
@@ -371,13 +402,12 @@ export class BattleEngine {
 
     if (deltaFraction < 0 && !bypassImmunity) {
       if (this.hasAbilityFlag(unit, "immuneToTurnMeterReduction")) {
-        this.log(`${unit.name} is immune to Turn Meter reduction.`, "info");
+        this.logPassive(`${unit.name} is immune to Turn Meter reduction.`);
         if (this.hasAbilityFlag(unit, "counterOnSpdDownAttempt")) {
           const activeActor = this.getUnitById(this.activeUnitId);
           if (activeActor && activeActor.teamId !== unit.teamId && activeActor.currentHp > 0) {
-            this.log(
-              `[${unit.name}] Steadfast Knight triggers against Turn Meter reduction attempt and counterattacks with [Auric Lance]!`,
-              "special"
+            this.logPassive(
+              `[${unit.name}] Steadfast Knight triggers against Turn Meter reduction attempt and counterattacks with [Auric Lance]!`
             );
             this.executeCounterSkill(unit, "auric_lance", activeActor.id);
           }
@@ -387,9 +417,8 @@ export class BattleEngine {
       const mult = this.getAbilityFlagValue(unit, "turnMeterReductionMultiplier");
       if (mult !== null) {
         effectiveFraction *= mult;
-        this.log(
-          `${unit.name}'s Molten Immunity reduces Turn Meter reduction by 50%.`,
-          "info"
+        this.logPassive(
+          `${unit.name}'s Molten Immunity reduces Turn Meter reduction by 50%.`
         );
       }
     }
@@ -431,10 +460,8 @@ export class BattleEngine {
       if (solanar.currentHp > 0 && this.rng() < 0.2) {
         this._inSolarNovaCounter = true;
         try {
-          this.log(
-            `[${solanar.name}] Scholar of Sun / Solar Nova reacts to ${reasonText} and counterattacks with [Solar Nova]!`,
-            "special",
-            { isSkill: false }
+          this.logPassive(
+            `[${solanar.name}] Scholar of Sun reacts to ${reasonText} and counterattacks with [Solar Nova]!`
           );
           const enemies = this.getLivingEnemiesOf(solanar);
           if (enemies.length > 0) {
@@ -485,14 +512,10 @@ export class BattleEngine {
         const basicSkillId = spartanBasicSkills[spartan.templateId];
         const basicSkill = Registry.getSkill(basicSkillId);
         if (basicSkill) {
-          this.log(
-            `[Spartan Unity] ${spartan.name} coordinates with ${attacker.name} and joins in with [${basicSkill.name}]!`,
-            "special"
+          this.logPassive(
+            `[Spartan Unity] ${spartan.name} coordinates with ${attacker.name} to join in with [${basicSkill.name}]!`
           );
-          this.runSkillResolution(spartan, basicSkill, tgt.id, {
-            isFreeCounter: true,
-            isTeamUp: true,
-          });
+          this.executeAllySkill(spartan, basicSkillId, tgt.id);
         }
       }
     } finally {
@@ -564,9 +587,8 @@ export class BattleEngine {
     ) {
       if (!target.customCounters) target.customCounters = {};
       target.customCounters.luckActiveCooldown = 3;
-      this.log(
-        `[LUCK IS ON MY SIDE] John-117 evades massive damage (${amount} > 30% MAX HP) and takes an Instant Turn!`,
-        "special"
+      this.logPassive(
+        `[LUCK IS ON MY SIDE] John-117 evades massive damage (${amount} > 30% MAX HP) and takes an Instant Turn!`
       );
       const spartanCount = this.getSpartanAlliesCount(target);
       if (spartanCount >= 1) {
@@ -592,9 +614,8 @@ export class BattleEngine {
       this.hasAbilityFlag(target, "spartanBigHitArmorUp") &&
       amount > target.effectiveMaxHp * 0.3
     ) {
-      this.log(
-        `[DEFENSIVE BULWARK] Fred-104 receives damage greater than 30% MAX HP and instantly triggers Armor Up!`,
-        "special"
+      this.logPassive(
+        `[DEFENSIVE BULWARK] Fred-104 receives damage greater than 30% MAX HP and instantly triggers Armor Up!`
       );
       this.executeCounterSkill(target, "armor_up");
     }
@@ -680,9 +701,8 @@ export class BattleEngine {
         const sharedDmg = Math.floor(remaining * sharePct);
         if (sharedDmg > 0) {
           remaining -= sharedDmg;
-          this.log(
-            `[Defensive Bulwark] Fred-104 intercepts ${sharedDmg} damage (${Math.round(sharePct * 100)}%) for ${target.name}!`,
-            "info"
+          this.logPassive(
+            `[Defensive Bulwark] Fred-104 intercepts ${sharedDmg} damage (${Math.round(sharePct * 100)}%) for ${target.name}!`
           );
           this.applyCalculatedDamage(fred, sharedDmg, {
             attacker,
@@ -695,16 +715,30 @@ export class BattleEngine {
             1,
             Math.floor(this.getEffectiveStats(fred).def * fredDefHealPct)
           );
-          this.healUnit(fred, fredHealAmt, "Defensive Bulwark Regeneration");
+          this.healUnit(fred, fredHealAmt, "Defensive Bulwark Regeneration", {
+            isPassive: true,
+          });
 
           if (spartanCount >= 2) {
             const sVal = Math.floor(3.0 * this.getEffectiveStats(fred).def);
             fred.shieldHp = (fred.shieldHp || 0) + sVal;
             target.shieldHp = (target.shieldHp || 0) + sVal;
-            this.statusManager.applyStatus(fred, fred, "shield", { duration: 2 });
-            this.statusManager.applyStatus(fred, target, "shield", { duration: 2 });
+            this.statusManager.applyStatus(fred, fred, "shield", {
+              duration: 2,
+              silent: true,
+            });
+            this.statusManager.applyStatus(fred, target, "shield", {
+              duration: 2,
+              silent: true,
+            });
+            this.logPassive(
+              `[Defensive Bulwark] Fred-104 grants +${sVal} [Shield] (2T) to himself and ${target.name}.`
+            );
           }
           if (spartanCount >= 3 && attacker && attacker.currentHp > 0) {
+            this.logPassive(
+              `[Defensive Bulwark] Fred-104 prepares to counterattack ${attacker.name} with [Countermand]!`
+            );
             this.executeCounterSkill(fred, "countermand", attacker.id);
           }
         }
@@ -758,7 +792,9 @@ export class BattleEngine {
     if (attacker && actual > 0 && this.hasAbilityFlag(attacker, "healOnDamageDealtPct")) {
       const pct = this.getAbilityFlagValue(attacker, "healOnDamageDealtPct") || 0.25;
       const lifesteal = Math.max(1, Math.floor(actual * pct));
-      this.healUnit(attacker, lifesteal, `${attacker.name}'s Pinpoint Accuracy Lifesteal`);
+      this.healUnit(attacker, lifesteal, `${attacker.name}'s Pinpoint Accuracy Lifesteal`, {
+        isPassive: true,
+      });
     }
 
     // Kelly-087 Guarded and Ready: Whenever an ally under a Shield takes damage, heal 50%
@@ -768,7 +804,9 @@ export class BattleEngine {
       );
       if (kelly) {
         const echoHeal = Math.max(1, Math.floor(actual * 0.5));
-        this.healUnit(target, echoHeal, "Guarded and Ready Shield Echo");
+        this.healUnit(target, echoHeal, "Guarded and Ready Shield Echo", {
+          isPassive: true,
+        });
       }
     }
 
@@ -786,12 +824,14 @@ export class BattleEngine {
       if (kelly) {
         if (!kelly.customCounters) kelly.customCounters = {};
         kelly.customCounters.guardedReadyCooldown = 4;
-        this.log(
-          `[GUARDED AND READY] ${target.name} fell below 50% HP! Kelly-087 cleanses all debuffs and grants [Stone Skin] (1T)!`,
-          "special"
+        this.logPassive(
+          `[GUARDED AND READY] ${target.name} fell below 50% HP! Kelly-087 cleanses all debuffs and grants [Stone Skin] (1T)!`
         );
         target.statuses = target.statuses.filter((s) => s.category !== "debuff" || s.isProtected);
-        this.statusManager.applyStatus(kelly, target, "stone_skin", { duration: 1 });
+        this.statusManager.applyStatus(kelly, target, "stone_skin", {
+          duration: 1,
+          silent: true,
+        });
       }
 
       // John-117 3 Spartan Allies: Instantly activates Spartans, As One when ally drops below 50% HP
@@ -803,9 +843,8 @@ export class BattleEngine {
       );
       if (john) {
         john._spartansAsOneProcThisTurn = true;
-        this.log(
-          `[Spartan Unity] Ally emergency (<50% HP)! John-117 instantly unleashes [Spartans, As One]!`,
-          "special"
+        this.logPassive(
+          `[Spartan Unity] Ally emergency (<50% HP)! John-117 instantly unleashes [Spartans, As One]!`
         );
         this.executeCounterSkill(john, "spartans_as_one");
       }
@@ -958,7 +997,7 @@ export class BattleEngine {
     });
   }
 
-  healUnit(target, amount, sourceLabel = "Healing") {
+  healUnit(target, amount, sourceLabel = "Healing", { isPassive = false } = {}) {
     if (!target || target.currentHp <= 0 || !Number.isFinite(amount) || amount <= 0) return 0;
     const healMod = this.statusManager.getStatModifier(target, "healReceivedMultiplier") ?? 1.0;
     const itemMod = this.getActiveItem(target)?.id === "crystal_jade" ? 1.1 : 1.0;
@@ -967,11 +1006,12 @@ export class BattleEngine {
     target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + effectiveHeal);
     const actualGained = target.currentHp - prevHp;
     if (actualGained > 0) {
-      this.log(
-        `[${sourceLabel}] ${target.name} recovers +${actualGained} HP (${target.currentHp}/${target.effectiveMaxHp} HP).`,
-        "heal",
-        { isSkill: false }
-      );
+      const msg = `[${sourceLabel}] ${target.name} recovers +${actualGained} HP (${target.currentHp}/${target.effectiveMaxHp} HP).`;
+      if (isPassive) {
+        this.logPassive(msg);
+      } else {
+        this.log(msg, "heal", { isSkill: false });
+      }
     }
     return actualGained;
   }
@@ -1312,12 +1352,17 @@ export class BattleEngine {
   }
 
   beginUnitTurn(unit, { isExtraTurn = false } = {}) {
-    this.turnNumber += 1;
     this.cleanupDefeatedBossSummons();
     this.activeUnitId = unit.id;
     if (!isExtraTurn && !this.actedInCurrentRound.includes(unit.id)) {
       this.actedInCurrentRound.push(unit.id);
     }
+
+    this.log(
+      `[Next Turn] ${unit.name}'s turn begins${isExtraTurn ? " (EXTRA/INSTANT TURN)" : ""} (${unit.currentHp}/${unit.effectiveMaxHp} HP, ${unit.currentEnergy}/${unit.maxEnergy} EN).`,
+      "next_turn",
+      { isSkill: false }
+    );
 
     if (unit.stance === "rest") {
       this.log(`${unit.name} recovers from Rest (full Defense restored).`, "info");
@@ -1402,37 +1447,119 @@ export class BattleEngine {
   }
 
   executeBonusHit({ attacker, target, element, stab, rawMultiplier, ignoreDefPct = 0, label }) {
-    if (target.currentHp <= 0) return;
-    const tempSkill = {
-      id: "bonus_hit",
-      name: label,
-      element,
-      stab,
-      computeRawHit: ({ stats }) => stats.atk * rawMultiplier,
+    const runHit = () => {
+      if (!target || target.currentHp <= 0 || !attacker || attacker.currentHp <= 0) return;
+      const tempSkill = {
+        id: "bonus_hit",
+        name: label,
+        element,
+        stab,
+        computeRawHit: ({ stats }) => stats.atk * rawMultiplier,
+      };
+      const { damage, isCrit } = this.damagePipeline.computeHitDamage({
+        attacker,
+        target,
+        skill: tempSkill,
+        ignoreDefPct,
+      });
+      const dealt = this.applyCalculatedDamage(target, damage, {
+        attacker,
+        skill: tempSkill,
+      });
+      this.log(
+        `[Normal Attack] ${attacker.name} [${label}] -> ${target.name}: ${dealt} DMG${isCrit ? " [CRIT]" : ""}`,
+        "normal_attack",
+        { isSkill: true }
+      );
     };
-    const { damage, isCrit } = this.damagePipeline.computeHitDamage({
-      attacker,
-      target,
-      skill: tempSkill,
-      ignoreDefPct,
-    });
-    this.applyCalculatedDamage(target, damage, {
-      attacker,
-      skill: tempSkill,
-      sourceLabel: `${label}${isCrit ? " (CRIT)" : ""}`,
-    });
+
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      this.queueFollowUpAttack(runHit, { category: "bonus" });
+    } else {
+      runHit();
+    }
+  }
+
+  executeFollowUpSkill(attacker, skillId, targetId = null, reasonMessage = null) {
+    if (!attacker || attacker.currentHp <= 0 || this.winnerTeam) return;
+    const runFollowUp = () => {
+      if (attacker.currentHp <= 0 || this.winnerTeam) return;
+      const skill = Registry.getSkill(skillId);
+      if (!skill) return;
+      if (reasonMessage) {
+        this.log(reasonMessage, "normal_attack", { isSkill: false });
+      }
+      if (!attacker.customCounters.predatorMovesUsed) {
+        attacker.customCounters.predatorMovesUsed = {};
+      }
+      attacker.customCounters.predatorMovesUsed[skillId] = true;
+      this.runSkillResolution(attacker, skill, targetId, {
+        isFreeCounter: false,
+        isTeamUp: false,
+        isRepeatAttack: true,
+      });
+      this.syncUnitActiveMoves(attacker);
+    };
+
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      this.queueFollowUpAttack(runFollowUp, {
+        category: "bonus",
+        dedupKey: `followup:${attacker.id}:${skillId}:${targetId || "auto"}`,
+      });
+    } else {
+      runFollowUp();
+    }
+  }
+
+  executeAllySkill(attacker, skillId, targetId = null) {
+    if (!attacker || attacker.currentHp <= 0 || this.winnerTeam) return;
+    const runAlly = () => {
+      if (attacker.currentHp <= 0 || this.winnerTeam) return;
+      const skill = Registry.getSkill(skillId);
+      if (!skill) return;
+      this.runSkillResolution(attacker, skill, targetId, {
+        isFreeCounter: true,
+        isTeamUp: true,
+      });
+      this.syncUnitActiveMoves(attacker);
+    };
+
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      this.queueFollowUpAttack(runAlly, {
+        category: "ally_attack",
+        dedupKey: `ally:${attacker.id}:${skillId}:${targetId || "auto"}`,
+      });
+    } else {
+      runAlly();
+    }
   }
 
   executeCounterSkill(attacker, skillId, targetId = null) {
-    if (attacker.currentHp <= 0 || this.winnerTeam) return;
-    const skill = Registry.getSkill(skillId);
-    if (!skill) return;
-    if (!attacker.customCounters.predatorMovesUsed) {
-      attacker.customCounters.predatorMovesUsed = {};
+    if (!attacker || attacker.currentHp <= 0 || this.winnerTeam) return;
+    const runCounter = () => {
+      if (attacker.currentHp <= 0 || this.winnerTeam) return;
+      const skill = Registry.getSkill(skillId);
+      if (!skill) return;
+      if (!attacker.customCounters.predatorMovesUsed) {
+        attacker.customCounters.predatorMovesUsed = {};
+      }
+      attacker.customCounters.predatorMovesUsed[skillId] = true;
+      this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: true });
+      this.syncUnitActiveMoves(attacker);
+    };
+
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      this.queueFollowUpAttack(runCounter, {
+        category: "counterattack",
+        dedupKey: `counter:${attacker.id}:${skillId}:${targetId || "auto"}`,
+      });
+    } else {
+      runCounter();
     }
-    attacker.customCounters.predatorMovesUsed[skillId] = true;
-    this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: true });
-    this.syncUnitActiveMoves(attacker);
   }
 
   getUnitEvasionChance(unit) {
@@ -1473,6 +1600,11 @@ export class BattleEngine {
     const moveInfo = available.find((m) => m.id === moveId);
     if (!moveInfo || !moveInfo.usable) return false;
 
+    // Advance turn number at the start of the action so the entire sequence
+    // (attack -> passive -> attacks (if applicable) -> final result -> next turn)
+    // is grouped together in chronological order under [Tn].
+    this.turnNumber += 1;
+
     const skill = Registry.getSkill(moveId);
     const energySpent = moveInfo.energyCost || 0;
 
@@ -1493,6 +1625,10 @@ export class BattleEngine {
         );
         this.dealTrueDamage(attacker, massiveDmg, "Extrapolation: Beta Link Backlash");
         if (attacker.currentHp <= 0) {
+          this.log(
+            `[Final Result] ${attacker.name} was defeated by [Extrapolation: Beta Link] backlash (0/${attacker.effectiveMaxHp} HP).`,
+            "final_result"
+          );
           this.advanceToNextTurn();
           return true;
         }
@@ -1521,6 +1657,7 @@ export class BattleEngine {
       }
     }
 
+    // 1. Attack -> 2. Passive -> 3. Attacks (if applicable)
     try {
       this.runSkillResolution(attacker, skill, targetId, { isFreeCounter: false });
     } catch (err) {
@@ -1550,19 +1687,37 @@ export class BattleEngine {
       if (enemyZander && energySpent > 0) {
         enemyZander.customCounters.transmutation =
           (enemyZander.customCounters.transmutation || 0) + energySpent;
-        this.log(
-          `[${enemyZander.name}] Transmutation Counter +${energySpent} -> ${enemyZander.customCounters.transmutation}/600.`,
-          "info"
+        this.logPassive(
+          `[${enemyZander.name}] Transmutation Counter +${energySpent} -> ${enemyZander.customCounters.transmutation}/600.`
         );
         if (enemyZander.customCounters.transmutation >= 600) {
           enemyZander.customCounters.transmutation = 0;
-          this.log(
-            `[${enemyZander.name}] Transmutation Counter reached 600: granted an Instant Turn to activate [Mode: Evolution].`,
-            "crit"
+          this.logPassive(
+            `[${enemyZander.name}] Transmutation Counter reached 600: granted an Instant Turn to activate [Mode: Evolution].`
           );
           this.enterZanderEvolution(enemyZander);
           this.grantExtraTurn(enemyZander);
         }
+      }
+    }
+
+    const enemyTheridine = this.getLivingEnemiesOf(attacker).find(
+      (e) =>
+        e.templateId === "theridine_great_septimus" &&
+        (e.customCounters.chargingBarsRemaining || 0) > 0
+    );
+    if (enemyTheridine && enemyTheridine.currentHp > 0) {
+      enemyTheridine.customCounters.chargingReactionsLeft -= 1;
+      const left = enemyTheridine.customCounters.chargingReactionsLeft;
+      this.logPassive(
+        `[${enemyTheridine.name}] reacts after ${attacker.name}'s turn (${7 - left}/7 actions elapsed, ${enemyTheridine.customCounters.chargingBarsRemaining} Charging Bars left).`
+      );
+      if (left <= 0) {
+        enemyTheridine.customCounters.chargingBarsRemaining = 0;
+        this.logPassive(
+          `[${enemyTheridine.name}] completes Im Anfang War die Tat charging and unleashes [FOR ONE IS HOLY]!`
+        );
+        this.executeCounterSkill(enemyTheridine, "for_one_is_holy");
       }
     }
 
@@ -1575,30 +1730,25 @@ export class BattleEngine {
     if (endItem && typeof endItem.onTurnEnd === "function") {
       endItem.onTurnEnd({ unit: attacker, engine: this });
     }
+    // Buffs only end AFTER a character takes their turn (and do not decrease on the turn placed/stolen)
     this.statusManager.tickStatuses(attacker, "TURN_END");
 
-    const enemyTheridine = this.getLivingEnemiesOf(attacker).find(
-      (e) =>
-        e.templateId === "theridine_great_septimus" &&
-        (e.customCounters.chargingBarsRemaining || 0) > 0
+    // 4. Final Result
+    const livingAllies = this.getLivingAlliesOf(attacker);
+    const livingEnemies = this.getLivingEnemiesOf(attacker);
+    const shieldNote =
+      (attacker.shieldHp || 0) > 0
+        ? `, Shield: ${attacker.shieldHp}`
+        : (attacker.magmaShieldHp || 0) > 0
+        ? `, Magma Shield: ${attacker.magmaShieldHp}`
+        : "";
+    this.log(
+      `[Final Result] ${attacker.name} completes turn (${attacker.currentHp}/${attacker.effectiveMaxHp} HP${shieldNote}, ${attacker.currentEnergy}/${attacker.maxEnergy} EN) • Standing: Team ${attacker.teamId} (${livingAllies.length} alive) vs Opponents (${livingEnemies.length} alive).`,
+      "final_result",
+      { isSkill: false }
     );
-    if (enemyTheridine && enemyTheridine.currentHp > 0) {
-      enemyTheridine.customCounters.chargingReactionsLeft -= 1;
-      const left = enemyTheridine.customCounters.chargingReactionsLeft;
-      this.log(
-        `[${enemyTheridine.name}] reacts after ${attacker.name}'s turn (${7 - left}/7 actions elapsed, ${enemyTheridine.customCounters.chargingBarsRemaining} Charging Bars left).`,
-        "special"
-      );
-      if (left <= 0) {
-        enemyTheridine.customCounters.chargingBarsRemaining = 0;
-        this.log(
-          `[${enemyTheridine.name}] completes Im Anfang War die Tat charging and unleashes [FOR ONE IS HOLY]!`,
-          "crit"
-        );
-        this.executeCounterSkill(enemyTheridine, "for_one_is_holy");
-      }
-    }
 
+    // 5. Next Turn
     this.checkWinCondition();
     if (!this.winnerTeam) {
       this.checkAndAdvanceRound();
@@ -1611,407 +1761,498 @@ export class BattleEngine {
   }
 
   /**
-   * Executes a skill and condenses multi-hit damage readouts into a single combined line per target.
+   * Executes a skill and enforces strict ordering:
+   *   1. Attack (Primary skill header -> direct skill effects)
+   *   2. Passive (Passive reactions triggered during the attack)
+   *   3. Attacks (if applicable: Bonus/Repeat Attacks -> Ally Attacks -> Counterattacks)
    */
   runSkillResolution(
     attacker,
     skill,
     targetId,
-    { isFreeCounter = false, isTeamUp = false } = {}
+    { isFreeCounter = false, isTeamUp = false, isRepeatAttack = false } = {}
   ) {
-    if (typeof skill.onBeforeSkill === "function") {
-      skill.onBeforeSkill({ attacker, engine: this });
-    }
+    const frame = {
+      phase: "attack",
+      passiveLogs: [],
+      followUpQueue: [],
+      dedupKeys: new Set(),
+    };
+    this._resolutionStack.push(frame);
 
-    let targets = [];
-    if (skill.targetType === "self") {
-      targets = [attacker];
-    } else if (skill.targetType === "all_allies") {
-      targets = this.getLivingAlliesOf(attacker);
-    } else if (skill.targetType === "all_enemies") {
-      targets = this.getLivingEnemiesOf(attacker);
-    } else if (skill.targetType === "any_unit") {
-      const chosen =
-        this.getUnitById(targetId) || this.getLivingEnemiesOf(attacker)[0];
-      if (chosen) {
-        targets = [chosen];
-      }
-    } else if (skill.targetType === "single_enemy") {
-      const chosen =
-        this.getUnitById(targetId) || this.getLivingEnemiesOf(attacker)[0];
-      if (chosen && chosen.currentHp > 0) {
-        targets = [chosen];
-      }
-    }
+    const attackCategory = isTeamUp
+      ? "ally_attack"
+      : isFreeCounter && !isRepeatAttack && !skill._isRepeat
+      ? "counterattack"
+      : "normal_attack";
+    const attackPrefix =
+      attackCategory === "ally_attack"
+        ? "[Ally Attack] "
+        : attackCategory === "counterattack"
+        ? "[Counterattack] "
+        : "[Normal Attack] ";
 
-    if (typeof skill.execute === "function" && !skill.computeRawHit) {
-      // Allow enemy-targeted status skills to be evaded by Yautja Cloak / Evasion
-      if (
-        !skill.undodgeable &&
-        (skill.targetType === "single_enemy" || skill.targetType === "all_enemies")
-      ) {
-        const survivingTargets = [];
+    try {
+      const preSkillLogsStart = this.logs.length;
+      if (typeof skill.onBeforeSkill === "function") {
+        skill.onBeforeSkill({ attacker, engine: this });
+      }
+      const preSkillLogs = this.logs.splice(preSkillLogsStart);
+      let preSkillLogsFlushed = false;
+
+      let targets = [];
+      if (skill.targetType === "self") {
+        targets = [attacker];
+      } else if (skill.targetType === "all_allies") {
+        targets = this.getLivingAlliesOf(attacker);
+      } else if (skill.targetType === "all_enemies") {
+        targets = this.getLivingEnemiesOf(attacker);
+      } else if (skill.targetType === "any_unit") {
+        const chosen =
+          this.getUnitById(targetId) || this.getLivingEnemiesOf(attacker)[0];
+        if (chosen) {
+          targets = [chosen];
+        }
+      } else if (skill.targetType === "single_enemy") {
+        const chosen =
+          this.getUnitById(targetId) || this.getLivingEnemiesOf(attacker)[0];
+        if (chosen && chosen.currentHp > 0) {
+          targets = [chosen];
+        }
+      }
+
+      if (typeof skill.execute === "function" && !skill.computeRawHit) {
+        // Allow enemy-targeted status skills to be evaded by Yautja Cloak / Evasion
+        if (
+          !skill.undodgeable &&
+          (skill.targetType === "single_enemy" || skill.targetType === "all_enemies")
+        ) {
+          const survivingTargets = [];
+          for (const target of targets) {
+            if (target.teamId !== attacker.teamId && target.currentHp > 0) {
+              const evadeChance = this.getUnitEvasionChance(target);
+              if (evadeChance > 0 && this.rng() < evadeChance) {
+                this.log(
+                  `${attackPrefix}${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
+                  attackCategory,
+                  { isSkill: true }
+                );
+                if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+                  this.logs.push(...preSkillLogs);
+                  preSkillLogsFlushed = true;
+                }
+                if (
+                  !isFreeCounter &&
+                  this.hasAbilityFlag(target, "counterOnEvade") &&
+                  attacker.currentHp > 0
+                ) {
+                  this.logPassive(
+                    `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`
+                  );
+                  this.executeCounterSkill(target, "wrist_blades", attacker.id);
+                }
+                continue;
+              }
+            }
+            survivingTargets.push(target);
+          }
+          targets = survivingTargets;
+        }
+
+        if (
+          targets.length > 0 ||
+          skill.targetType === "self" ||
+          skill.targetType === "all_allies"
+        ) {
+          const execLogsStart = this.logs.length;
+          skill.execute({ attacker, targets, engine: this });
+          const addedLogs = this.logs.splice(execLogsStart);
+          const skillHeaders = [];
+          const skillEffects = [];
+          for (const entry of addedLogs) {
+            const isHeaderMsg =
+              entry.isSkill ||
+              entry.message.startsWith("[WAIT]") ||
+              entry.message.startsWith("[REST]") ||
+              entry.message.startsWith("[FORM]") ||
+              entry.message.startsWith(`[${attacker.name}]`) ||
+              entry.message.startsWith(`${attacker.name} casts`);
+            if (isHeaderMsg && skillHeaders.length === 0) {
+              entry.isSkill = true;
+              entry.type = attackCategory;
+              if (!entry.message.startsWith("[Normal Attack]") && !entry.message.startsWith("[Counterattack]") && !entry.message.startsWith("[Ally Attack]")) {
+                entry.message = `${attackPrefix}${entry.message}`;
+              }
+              skillHeaders.push(entry);
+            } else {
+              entry.isSkill = false;
+              skillEffects.push(entry);
+            }
+          }
+          if (skillHeaders.length === 0) {
+            const targetLabel =
+              targets.map((t) => t.name).join(", ") || attacker.name;
+            this.log(
+              `${attackPrefix}${attacker.name} [${skill.name}] -> ${targetLabel}`,
+              attackCategory,
+              { isSkill: true }
+            );
+          } else {
+            this.logs.push(...skillHeaders);
+          }
+          if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+            this.logs.push(...preSkillLogs);
+            preSkillLogsFlushed = true;
+          }
+          this.logs.push(...skillEffects);
+        }
+      } else if (skill.computeRawHit) {
+        const attackedDefendersThisSkill = new Set();
+
         for (const target of targets) {
-          if (target.teamId !== attacker.teamId && target.currentHp > 0) {
+          if (target.currentHp <= 0) continue;
+
+          // 1. Evasion Check (Yautja Cloak, Predator Sprint, Refracting Mirror, Lens of Intangibility)
+          if (!skill.undodgeable) {
             const evadeChance = this.getUnitEvasionChance(target);
             if (evadeChance > 0 && this.rng() < evadeChance) {
               this.log(
-                `${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
-                "special",
+                `${attackPrefix}${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
+                attackCategory,
                 { isSkill: true }
               );
+              if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+                this.logs.push(...preSkillLogs);
+                preSkillLogsFlushed = true;
+              }
               if (
                 !isFreeCounter &&
                 this.hasAbilityFlag(target, "counterOnEvade") &&
                 attacker.currentHp > 0
               ) {
-                this.log(
-                  `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`,
-                  "special",
-                  { isSkill: false }
+                this.logPassive(
+                  `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`
                 );
                 this.executeCounterSkill(target, "wrist_blades", attacker.id);
               }
               continue;
             }
           }
-          survivingTargets.push(target);
-        }
-        targets = survivingTargets;
-      }
 
-      if (
-        targets.length > 0 ||
-        skill.targetType === "self" ||
-        skill.targetType === "all_allies"
-      ) {
-        const execLogsStart = this.logs.length;
-        skill.execute({ attacker, targets, engine: this });
-        const addedLogs = this.logs.splice(execLogsStart);
-        const skillHeaders = [];
-        const skillEffects = [];
-        for (const entry of addedLogs) {
-          const isHeaderMsg =
-            entry.isSkill ||
-            entry.message.startsWith("[WAIT]") ||
-            entry.message.startsWith("[REST]") ||
-            entry.message.startsWith("[FORM]") ||
-            entry.message.startsWith(`[${attacker.name}]`) ||
-            entry.message.startsWith(`${attacker.name} casts`);
-          if (isHeaderMsg && skillHeaders.length === 0) {
-            entry.isSkill = true;
-            skillHeaders.push(entry);
-          } else {
-            entry.isSkill = false;
-            skillEffects.push(entry);
-          }
-        }
-        if (skillHeaders.length === 0) {
-          const targetLabel =
-            targets.map((t) => t.name).join(", ") || attacker.name;
-          this.log(
-            `${attacker.name} [${skill.name}] -> ${targetLabel}`,
-            "special",
-            { isSkill: true }
-          );
-        } else {
-          this.logs.push(...skillHeaders);
-        }
-        this.logs.push(...skillEffects);
-      }
-    } else if (skill.computeRawHit) {
-      const attackedDefendersThisSkill = new Set();
-
-      for (const target of targets) {
-        if (target.currentHp <= 0) continue;
-
-        // 1. Evasion Check (Yautja Cloak, Predator Sprint, Refracting Mirror, Lens of Intangibility)
-        if (!skill.undodgeable) {
-          const evadeChance = this.getUnitEvasionChance(target);
-          if (evadeChance > 0 && this.rng() < evadeChance) {
-            this.log(
-              `${attacker.name} [${skill.name}] -> ${target.name}: EVADED (${Math.round(evadeChance * 100)}% Evasion).`,
-              "special",
-              { isSkill: true }
-            );
-            if (
-              !isFreeCounter &&
-              this.hasAbilityFlag(target, "counterOnEvade") &&
-              attacker.currentHp > 0
-            ) {
-              this.log(
-                `[${target.name}] Yautja Cloak triggers on Evasion and counterattacks with [Wrist Blades]!`,
-                "special",
-                { isSkill: false }
-              );
-              this.executeCounterSkill(target, "wrist_blades", attacker.id);
-            }
-            continue;
-          }
-        }
-
-        // 2. Accuracy Check (includes Blindness -20% accuracy penalty)
-        if (!skill.undodgeable && skill.accuracy !== null) {
-          const accBonus = this.getEffectiveStats(attacker).accuracyBonus || 0;
-          const blindPenalty = this.statusManager.hasStatus(attacker, "blindness")
-            ? -20
-            : 0;
-          const effectiveAcc = Math.max(
-            5,
-            Math.min(100, (skill.accuracy ?? 100) + accBonus + blindPenalty)
-          );
-          if (effectiveAcc < 100 && this.rng() * 100 > effectiveAcc) {
-            this.log(
-              `${attacker.name} [${skill.name}] -> ${target.name}: MISSED.`,
-              "info",
-              { isSkill: true }
-            );
-            continue;
-          }
-        }
-
-        const hitEffectLogsStart = this.logs.length;
-        target._absorbedByShieldThisSkill = 0;
-
-        if (typeof skill.onBeforeAttack === "function") {
-          skill.onBeforeAttack({ attacker, target, engine: this });
-        }
-
-        const hits =
-          typeof skill.getDynamicHitCount === "function"
-            ? skill.getDynamicHitCount({ attacker, target, engine: this })
-            : skill.hits || 1;
-
-        let totalDamageToTarget = 0;
-        let critHitsCount = 0;
-        let maxIgnoredDefPct = 0;
-        const perHitAmounts = [];
-
-        const bypassShieldsAndBlocks =
-          this.getActiveAbilities(attacker).some((a) => a.id === "lethal_lava") &&
-          this.statusManager.hasStatus(target, "hex");
-
-        for (let h = 0; h < hits; h++) {
-          if (target.currentHp <= 0 || target._justRevivedProtectThisSkill) break;
-
-          const ignoreDefPct =
-            typeof skill.getIgnoreDefPct === "function"
-              ? skill.getIgnoreDefPct({ attacker, target, hitIndex: h, engine: this })
+          // 2. Accuracy Check (includes Blindness -20% accuracy penalty)
+          if (!skill.undodgeable && skill.accuracy !== null) {
+            const accBonus = this.getEffectiveStats(attacker).accuracyBonus || 0;
+            const blindPenalty = this.statusManager.hasStatus(attacker, "blindness")
+              ? -20
               : 0;
+            const effectiveAcc = Math.max(
+              5,
+              Math.min(100, (skill.accuracy ?? 100) + accBonus + blindPenalty)
+            );
+            if (effectiveAcc < 100 && this.rng() * 100 > effectiveAcc) {
+              this.log(
+                `${attackPrefix}${attacker.name} [${skill.name}] -> ${target.name}: MISSED.`,
+                attackCategory,
+                { isSkill: true }
+              );
+              if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+                this.logs.push(...preSkillLogs);
+                preSkillLogsFlushed = true;
+              }
+              continue;
+            }
+          }
 
-          const { damage, isCrit, ignoredDefPct } =
-            this.damagePipeline.computeHitDamage({
+          const hitEffectLogsStart = this.logs.length;
+          target._absorbedByShieldThisSkill = 0;
+
+          if (typeof skill.onBeforeAttack === "function") {
+            skill.onBeforeAttack({ attacker, target, engine: this });
+          }
+
+          const hits =
+            typeof skill.getDynamicHitCount === "function"
+              ? skill.getDynamicHitCount({ attacker, target, engine: this })
+              : skill.hits || 1;
+
+          let totalDamageToTarget = 0;
+          let critHitsCount = 0;
+          let maxIgnoredDefPct = 0;
+          const perHitAmounts = [];
+
+          const bypassShieldsAndBlocks =
+            Boolean(skill.bypassShieldsAndBlocks) ||
+            (this.getActiveAbilities(attacker).some((a) => a.id === "lethal_lava") &&
+              this.statusManager.hasStatus(target, "hex"));
+
+          for (let h = 0; h < hits; h++) {
+            if (target.currentHp <= 0 || target._justRevivedProtectThisSkill) break;
+
+            const ignoreDefPct =
+              typeof skill.getIgnoreDefPct === "function"
+                ? skill.getIgnoreDefPct({ attacker, target, hitIndex: h, engine: this })
+                : 0;
+
+            const { damage, isCrit, ignoredDefPct } =
+              this.damagePipeline.computeHitDamage({
+                attacker,
+                target,
+                skill,
+                ignoreDefPct,
+                hitIndex: h,
+                isFreeCounter,
+              });
+
+            const dealt = this.applyCalculatedDamage(target, damage, {
               attacker,
-              target,
               skill,
-              ignoreDefPct,
-              hitIndex: h,
-              isFreeCounter,
+              bypassShieldsAndBlocks,
+              bypassShields: Boolean(skill.bypassShields),
+              bypassUnkillable: Boolean(skill.bypassUnkillable),
+              silentShields: hits > 1,
             });
+            totalDamageToTarget += dealt;
+            perHitAmounts.push(isCrit ? `${dealt}!` : `${dealt}`);
+            if (isCrit) critHitsCount += 1;
+            if (ignoredDefPct > maxIgnoredDefPct) maxIgnoredDefPct = ignoredDefPct;
+            attackedDefendersThisSkill.add(target);
 
-          const dealt = this.applyCalculatedDamage(target, damage, {
-            attacker,
-            skill,
-            bypassShieldsAndBlocks,
-            bypassShields: Boolean(skill.bypassShields),
-            bypassUnkillable: Boolean(skill.bypassUnkillable),
-            silentShields: hits > 1,
-          });
-          totalDamageToTarget += dealt;
-          perHitAmounts.push(isCrit ? `${dealt}!` : `${dealt}`);
-          if (isCrit) critHitsCount += 1;
-          if (ignoredDefPct > maxIgnoredDefPct) maxIgnoredDefPct = ignoredDefPct;
-          attackedDefendersThisSkill.add(target);
+            if (this.statusManager.hasFlag(target, "removeOnDamage")) {
+              this.statusManager.removeStatus(target, "sleep");
+            }
 
-          if (this.statusManager.hasFlag(target, "removeOnDamage")) {
-            this.statusManager.removeStatus(target, "sleep");
-          }
+            if (typeof skill.onEachHit === "function") {
+              skill.onEachHit({ attacker, target, hitIndex: h, engine: this });
+            }
 
-          if (typeof skill.onEachHit === "function") {
-            skill.onEachHit({ attacker, target, hitIndex: h, engine: this });
-          }
+            // Debt-Bearer Alnith's Marker of Debt on-hit proc & Blood Due healing
+            if (this.hasAbilityFlag(attacker, "markerOfDebtOnHit") && target.currentHp > 0) {
+              const totalEnemyStacks = this.getTotalEnemyBloodDue(attacker);
+              const bonusChance = Math.min(0.25, totalEnemyStacks * 0.05);
+              if (this.rng() < 0.5 + bonusChance) {
+                const debuffPool = [
+                  "poison_dot",
+                  "burn",
+                  "hemorrhage",
+                  "acidic",
+                  "windstruck",
+                  "bleed",
+                  "decay",
+                ];
+                const picked =
+                  debuffPool[Math.floor(this.rng() * debuffPool.length)];
+                this.statusManager.applyStatus(attacker, target, picked, {
+                  duration: 1,
+                  stacks: 1,
+                });
+              }
+              const targetStacks = this.statusManager.getStacks(target, "blood_due");
+              if (targetStacks > 0 && attacker.currentHp > 0) {
+                const atkVal = this.getEffectiveStats(attacker).atk;
+                const healAmt = Math.max(
+                  1,
+                  Math.round(atkVal * 0.04 * targetStacks)
+                );
+                attacker.currentHp = Math.min(
+                  attacker.effectiveMaxHp,
+                  attacker.currentHp + healAmt
+                );
+              }
+            }
 
-          // Debt-Bearer Alnith's Marker of Debt on-hit proc & Blood Due healing
-          if (this.hasAbilityFlag(attacker, "markerOfDebtOnHit") && target.currentHp > 0) {
-            const totalEnemyStacks = this.getTotalEnemyBloodDue(attacker);
-            const bonusChance = Math.min(0.25, totalEnemyStacks * 0.05);
-            if (this.rng() < 0.5 + bonusChance) {
-              const debuffPool = [
-                "poison_dot",
-                "burn",
-                "hemorrhage",
-                "acidic",
-                "windstruck",
-                "bleed",
-                "decay",
-              ];
-              const picked =
-                debuffPool[Math.floor(this.rng() * debuffPool.length)];
-              this.statusManager.applyStatus(attacker, target, picked, {
-                duration: 1,
-                stacks: 1,
+            const atkItemEachHit = this.getActiveItem(attacker);
+            if (atkItemEachHit && typeof atkItemEachHit.onEachHit === "function") {
+              atkItemEachHit.onEachHit({
+                attacker,
+                target,
+                skill,
+                hitIndex: h,
+                engine: this,
               });
             }
-            const targetStacks = this.statusManager.getStacks(target, "blood_due");
-            if (targetStacks > 0 && attacker.currentHp > 0) {
-              const atkVal = this.getEffectiveStats(attacker).atk;
-              const healAmt = Math.max(
-                1,
-                Math.round(atkVal * 0.04 * targetStacks)
-              );
-              attacker.currentHp = Math.min(
-                attacker.effectiveMaxHp,
-                attacker.currentHp + healAmt
-              );
+
+            if (target.currentHp <= 0) {
+              if (typeof skill.onTargetKilled === "function") {
+                skill.onTargetKilled({ attacker, target, engine: this });
+              }
             }
           }
 
-          const atkItemEachHit = this.getActiveItem(attacker);
-          if (atkItemEachHit && typeof atkItemEachHit.onEachHit === "function") {
-            atkItemEachHit.onEachHit({
-              attacker,
-              target,
-              skill,
-              hitIndex: h,
-              engine: this,
-            });
-          }
+          const bufferedHitEffectLogs = this.logs.splice(hitEffectLogsStart);
+          const absorbedByShield = target._absorbedByShieldThisSkill || 0;
+          delete target._absorbedByShieldThisSkill;
 
-          if (target.currentHp <= 0) {
-            if (typeof skill.onTargetKilled === "function") {
-              skill.onTargetKilled({ attacker, target, engine: this });
+          // Single condensed log line per target combining all hits (Cause -> Effect):
+          const absorbedSummary =
+            absorbedByShield > 0 ? ` (${absorbedByShield} absorbed by Shield)` : "";
+          const hitsBreakdown =
+            perHitAmounts.length > 1
+              ? ` (${perHitAmounts.length} hits: ${perHitAmounts.join(" + ")})`
+              : "";
+          const critSummary =
+            critHitsCount > 0
+              ? perHitAmounts.length > 1
+                ? ` [${critHitsCount} CRIT]`
+                : " [CRIT]"
+              : "";
+          const ignoreSummary =
+            maxIgnoredDefPct > 0 ? ` [Ignored ${maxIgnoredDefPct}% DEF]` : "";
+
+          this.log(
+            `${attackPrefix}${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${absorbedSummary}${hitsBreakdown}${critSummary}${ignoreSummary}`,
+            attackCategory,
+            { isSkill: true }
+          );
+
+          if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+            this.logs.push(...preSkillLogs);
+            preSkillLogsFlushed = true;
+          }
+          this.logs.push(...bufferedHitEffectLogs);
+
+          if (totalDamageToTarget > 0) {
+            if (typeof skill.onAfterHit === "function") {
+              skill.onAfterHit({
+                attacker,
+                target,
+                totalDamageToTarget,
+                engine: this,
+              });
+            }
+            const atkItem = this.getActiveItem(attacker);
+            if (atkItem && typeof atkItem.onAfterDealDamage === "function") {
+              atkItem.onAfterDealDamage({
+                attacker,
+                target,
+                skill,
+                damageDealt: totalDamageToTarget,
+                engine: this,
+              });
             }
           }
-        }
 
-        const bufferedHitEffectLogs = this.logs.splice(hitEffectLogsStart);
-        const absorbedByShield = target._absorbedByShieldThisSkill || 0;
-        delete target._absorbedByShieldThisSkill;
-
-        // Single condensed log line per target combining all hits (Cause -> Effect):
-        const absorbedSummary =
-          absorbedByShield > 0 ? ` (${absorbedByShield} absorbed by Shield)` : "";
-        const hitsBreakdown =
-          perHitAmounts.length > 1
-            ? ` (${perHitAmounts.length} hits: ${perHitAmounts.join(" + ")})`
-            : "";
-        const critSummary =
-          critHitsCount > 0
-            ? perHitAmounts.length > 1
-              ? ` [${critHitsCount} CRIT]`
-              : " [CRIT]"
-            : "";
-        const ignoreSummary =
-          maxIgnoredDefPct > 0 ? ` [Ignored ${maxIgnoredDefPct}% DEF]` : "";
-
-        this.log(
-          `${attacker.name} [${skill.name}] -> ${target.name}: ${totalDamageToTarget} DMG${absorbedSummary}${hitsBreakdown}${critSummary}${ignoreSummary}`,
-          critHitsCount > 0 ? "crit" : "damage",
-          { isSkill: true }
-        );
-
-        this.logs.push(...bufferedHitEffectLogs);
-
-        if (totalDamageToTarget > 0) {
-          if (typeof skill.onAfterHit === "function") {
-            skill.onAfterHit({
+          if (typeof skill.onAfterAttack === "function") {
+            skill.onAfterAttack({
               attacker,
               target,
               totalDamageToTarget,
+              critHitsCount,
               engine: this,
-            });
-          }
-          const atkItem = this.getActiveItem(attacker);
-          if (atkItem && typeof atkItem.onAfterDealDamage === "function") {
-            atkItem.onAfterDealDamage({
-              attacker,
-              target,
-              skill,
-              damageDealt: totalDamageToTarget,
-              engine: this,
+              isRepeat: Boolean(skill._isRepeat),
             });
           }
         }
 
-        if (typeof skill.onAfterAttack === "function") {
-          skill.onAfterAttack({
-            attacker,
-            target,
-            totalDamageToTarget,
-            critHitsCount,
-            engine: this,
-            isRepeat: Boolean(skill._isRepeat),
-          });
-        }
-      }
-
-      this.recalculateSoulSpearDestruction();
-
-      if (!isFreeCounter) {
-        for (const defender of attackedDefendersThisSkill) {
-          for (const ab of this.getActiveAbilities(defender)) {
-            if (typeof ab.onAfterSkillAttacked === "function") {
-              ab.onAfterSkillAttacked({ attacker, defender, skill, engine: this });
-            }
-          }
-          // [Counterattack] buff: counterattack with basic move (0 Energy)
-          if (
-            defender.currentHp > 0 &&
-            attacker.currentHp > 0 &&
-            this.statusManager.hasFlag(defender, "counterOnAttacked")
-          ) {
-            const basicMoveId = defender.activeMoveIds?.[0];
-            if (basicMoveId) {
-              this.log(
-                `[${defender.name}] [Counterattack] triggers and retaliates with [${Registry.getSkill(basicMoveId)?.name || basicMoveId}]!`,
-                "special"
-              );
-              this.executeCounterSkill(defender, basicMoveId, attacker.id);
-            }
-          }
+        if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+          this.logs.push(...preSkillLogs);
+          preSkillLogsFlushed = true;
         }
 
-        // ByuN's Micro Jackson: when an enemy is attacked by an ally, 20% chance for ByuN to join in with [2-Barrack Rush]
-        if (attackedDefendersThisSkill.size > 0) {
+        this.recalculateSoulSpearDestruction();
+
+        // ============================================================
+        // PHASE 2: PASSIVE (Flush passive triggers & evaluate post-attack passives)
+        // ============================================================
+        frame.phase = "passive";
+        for (const msg of frame.passiveLogs) {
+          this.log(msg, "passive", { isSkill: false });
+        }
+        frame.passiveLogs.length = 0;
+
+        if (!isFreeCounter) {
+          for (const defender of attackedDefendersThisSkill) {
+            for (const ab of this.getActiveAbilities(defender)) {
+              if (typeof ab.onAfterSkillAttacked === "function") {
+                ab.onAfterSkillAttacked({ attacker, defender, skill, engine: this });
+              }
+            }
+            // [Counterattack] buff: counterattack with basic move (0 Energy)
+            if (
+              defender.currentHp > 0 &&
+              attacker.currentHp > 0 &&
+              this.statusManager.hasFlag(defender, "counterOnAttacked")
+            ) {
+              const basicMoveId = defender.activeMoveIds?.[0];
+              if (basicMoveId) {
+                this.logPassive(
+                  `[${defender.name}] [Counterattack] triggers and retaliates with [${Registry.getSkill(basicMoveId)?.name || basicMoveId}]!`
+                );
+                this.executeCounterSkill(defender, basicMoveId, attacker.id);
+              }
+            }
+          }
+
+          // ByuN's Micro Jackson: when an enemy is attacked by an ally, 20% chance for ByuN to join in with [2-Barrack Rush]
+          if (attackedDefendersThisSkill.size > 0) {
+            const primaryTarget = [...attackedDefendersThisSkill][0];
+            const allyByuns = this.getLivingAlliesOf(attacker).filter(
+              (u) =>
+                u.id !== attacker.id &&
+                this.hasAbilityFlag(u, "allyAttackJoinChance")
+            );
+            for (const byun of allyByuns) {
+              if (primaryTarget.currentHp > 0 && this.rng() < 0.2) {
+                this.logPassive(
+                  `[${byun.name}] Micro Jackson coordinates with ${attacker.name} to join in with [2-Barrack Rush]!`
+                );
+                this.executeAllySkill(byun, "two_barrack_rush", primaryTarget.id);
+              }
+            }
+          }
+        }
+
+        // Spartan Strike Team join-in: When a Spartan attacks or counterattacks, other living Spartans join in with basic skill
+        if (
+          !isTeamUp &&
+          !isRepeatAttack &&
+          !skill._isRepeat &&
+          this.hasAbilityFlag(attacker, "spartanTeamUp") &&
+          attackedDefendersThisSkill.size > 0
+        ) {
           const primaryTarget = [...attackedDefendersThisSkill][0];
-          const allyByuns = this.getLivingAlliesOf(attacker).filter(
-            (u) =>
-              u.id !== attacker.id &&
-              this.hasAbilityFlag(u, "allyAttackJoinChance")
-          );
-          for (const byun of allyByuns) {
-            if (primaryTarget.currentHp > 0 && this.rng() < 0.2) {
-              this.log(
-                `[${byun.name}] Micro Jackson joins ${attacker.name}'s attack with [2-Barrack Rush]!`,
-                "special"
-              );
-              this.executeCounterSkill(byun, "two_barrack_rush", primaryTarget.id);
-            }
-          }
+          this.triggerSpartanTeamUp(attacker, primaryTarget);
         }
+      } else {
+        if (!preSkillLogsFlushed && preSkillLogs.length > 0) {
+          this.logs.push(...preSkillLogs);
+          preSkillLogsFlushed = true;
+        }
+        frame.phase = "passive";
+        for (const msg of frame.passiveLogs) {
+          this.log(msg, "passive", { isSkill: false });
+        }
+        frame.passiveLogs.length = 0;
       }
 
-      // Spartan Strike Team join-in: When a Spartan attacks or counterattacks, other living Spartans join in with basic skill
-      if (
-        !isTeamUp &&
-        this.hasAbilityFlag(attacker, "spartanTeamUp") &&
-        attackedDefendersThisSkill.size > 0
-      ) {
-        const primaryTarget = [...attackedDefendersThisSkill][0];
-        this.triggerSpartanTeamUp(attacker, primaryTarget);
-      }
-
+      // ============================================================
+      // PHASE 3: ATTACKS (IF APPLICABLE) — Repeat/Bonus -> Ally Attacks -> Counterattacks
+      // ============================================================
+      frame.phase = "followup";
       if (typeof skill.onAfterSkill === "function") {
         skill.onAfterSkill({ attacker, targets, engine: this });
       }
-    }
 
-    if (!isFreeCounter) {
-      for (const u of this.units) {
-        if (u._justRevivedProtectThisSkill) {
-          delete u._justRevivedProtectThisSkill;
+      if (frame.followUpQueue.length > 0) {
+        const priorityOrder = { bonus: 1, ally_attack: 2, counterattack: 3 };
+        const sortedQueue = [...frame.followUpQueue].sort(
+          (a, b) => (priorityOrder[a.category] || 9) - (priorityOrder[b.category] || 9)
+        );
+        frame.followUpQueue.length = 0;
+        for (const item of sortedQueue) {
+          if (this.winnerTeam) break;
+          item.fn();
         }
       }
+
+      if (!isFreeCounter) {
+        for (const u of this.units) {
+          if (u._justRevivedProtectThisSkill) {
+            delete u._justRevivedProtectThisSkill;
+          }
+        }
+      }
+    } finally {
+      this._resolutionStack.pop();
     }
   }
 

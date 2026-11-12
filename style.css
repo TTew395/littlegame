@@ -1203,6 +1203,94 @@ body {
   color: #fecaca;
 }
 
+.log-normal_attack {
+  border-left: 3px solid #ef4444;
+  color: #fca5a5;
+}
+
+.log-counterattack {
+  border-left: 3px solid #f59e0b;
+  color: #fcd34d;
+}
+
+.log-ally_attack {
+  border-left: 3px solid #06b6d4;
+  color: #7dd3fc;
+}
+
+.log-line.log-passive,
+.log-line.log-final_result,
+.log-line.log-next_turn {
+  font-size: 0.72rem;
+  line-height: 1.32;
+  padding: 4px 7px;
+  margin-left: 0;
+  opacity: 0.96;
+}
+
+.log-passive {
+  border-left: 3px solid #a855f7;
+  color: #d8b4fe;
+}
+
+.log-final_result {
+  border-left: 3px solid #10b981;
+  color: #6ee7b7;
+  font-weight: 600;
+}
+
+.log-next_turn {
+  border-left: 3px solid #3b82f6;
+  color: #bfdbfe;
+  font-weight: 600;
+}
+
+.log-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
+.log-legend-pill {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.75);
+  border-left: 3px solid transparent;
+}
+
+.log-legend-pill.normal-attack {
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+.log-legend-pill.counterattack {
+  border-left-color: #f59e0b;
+  color: #fcd34d;
+}
+
+.log-legend-pill.ally-attack {
+  border-left-color: #06b6d4;
+  color: #7dd3fc;
+}
+
+.log-legend-pill.passive {
+  border-left-color: #a855f7;
+  color: #d8b4fe;
+}
+
+.log-legend-pill.final-result {
+  border-left-color: #10b981;
+  color: #6ee7b7;
+}
+
+.log-legend-pill.next-turn {
+  border-left-color: #3b82f6;
+  color: #bfdbfe;
+}
+
 .log-special {
   border-left: 3px solid var(--accent-gold);
   color: #fde68a;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Little Game Test Server</title>
-  <link rel="stylesheet" href="./style.css?v=10" />
+  <link rel="stylesheet" href="./style.css?v=11" />
 </head>
 <body>
   <!-- TOP NAVIGATION BAR -->
@@ -146,6 +146,14 @@
 
         <section class="log-card">
           <div class="card-title">Condensed Combat Log</div>
+          <div class="log-legend">
+            <span class="log-legend-pill normal-attack">Normal Attack</span>
+            <span class="log-legend-pill counterattack">Counterattack</span>
+            <span class="log-legend-pill ally-attack">Ally Attack</span>
+            <span class="log-legend-pill passive">Passive</span>
+            <span class="log-legend-pill final-result">Final Result</span>
+            <span class="log-legend-pill next-turn">Next Turn</span>
+          </div>
           <div id="combat-log-list" class="combat-log-list"></div>
         </section>
       </aside>
@@ -249,6 +257,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=10"></script>
+  <script type="module" src="./src/main.js?v=11"></script>
 </body>
 </html>
