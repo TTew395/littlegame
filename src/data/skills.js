@@ -1507,7 +1507,7 @@ export const SKILL_LIST = [
     onEachHit({ target }) {
       if (target.currentHp <= 0) return;
       target.statuses.forEach((st) => {
-        if (st.category === "buff" && !st.isProtected && st.duration !== null && st.duration > 0) {
+        if (st.category === "buff" && st.duration !== null && st.duration > 0) {
           st.duration = Math.max(0, st.duration - 1);
           if (st.duration === 0) {
             if (st.id === "shield") {
@@ -2232,11 +2232,11 @@ export const SKILL_LIST = [
     energyCost: 15,
     accuracy: 100,
     targetType: "single_enemy",
-    formulaText: "1.9 x ATK (x2 hits) • Ignore +5% DEF per hit • Repeat on Crit",
+    formulaText: "1.2 x ATK (x2 hits), ignores +5% more DEF per hit. Repeats on Crit",
     description:
       "Attacks one enemy twice. Will repeat this attack once if any of the hits were critical. Each subsequent hit from this skill will ignore an additional 5% of target DEF.",
     computeRawHit({ stats }) {
-      return 1.9 * stats.atk;
+      return 1.2 * stats.atk;
     },
     getIgnoreDefPct({ hitIndex }) {
       return Math.min(1.0, (hitIndex || 0) * 0.05);
@@ -2273,14 +2273,14 @@ export const SKILL_LIST = [
     energyCost: 35,
     accuracy: 95,
     targetType: "all_enemies",
-    formulaText: "3.8 x ATK (AoE) • [+Shatter] Self (2T) • [-DEF (60%)] & [Weaken (25%)] (2T)",
+    formulaText: "1.8 x ATK (AoE) • [+Shatter] Self (2T) • [-DEF (60%)] & [Weaken (25%)] (2T)",
     description:
-      "Attacks all enemies. Places a 60% [Decrease DEF] and 25% [Weaken] debuff for 2 turns. Before attacking, places a 15% [Shatter] buff on this Champion for 2 turns.",
+      "Attacks all enemies. Places a 60% [Decrease DEF] and 25% [Weaken] debuff for 2 turns. Before attacking, places a 15% [Shatter] buff on this character for 2 turns.",
     onBeforeSkill({ attacker, engine }) {
       engine.statusManager.applyStatus(attacker, attacker, "shatter", { duration: 2 });
     },
     computeRawHit({ stats }) {
-      return 3.8 * stats.atk;
+      return 1.8 * stats.atk;
     },
     onEachHit({ attacker, target, engine }) {
       if (target.currentHp <= 0) return;
@@ -2302,7 +2302,7 @@ export const SKILL_LIST = [
     bypassShields: true,
     bypassShieldsAndBlocks: true,
     bypassUnkillable: true,
-    formulaText: "4.4 x ATK (AoE) • Pierces Buffs • Ignores 50% DEF • Block Revive",
+    formulaText: "2.2 x ATK (AoE) • Pierces Buffs • Ignores 50% DEF • Block Revive",
     description:
       "Attacks all enemies. Will ignore [Shield], [Strengthen], [Ally Protection], [Unkillable] and [Block Damage] buffs, as well as 50% of target DEF. Enemies killed by this skill cannot be revived.\n[Spartan Unity]\n1 Spartan Ally: Before attacking, steals all buffs from target. Deals double damage against bosses.\n2 Spartan Allies: Before attacking, places 50% [Increase ATK], 30% [Increase C. DMG] and 30% [Increase C. RATE] buff for 2 turns.\n3 Spartan Allies: Ignores 75% DEF instead (100% vs bosses).",
     onBeforeSkill({ attacker, engine }) {
@@ -2328,7 +2328,7 @@ export const SKILL_LIST = [
     },
     computeRawHit({ attacker, target, stats, engine }) {
       const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
-      let mult = 4.4;
+      let mult = 2.2;
       if (spartanCount >= 1 && target && target.isBoss) {
         mult *= 2.0;
       }
@@ -2352,11 +2352,11 @@ export const SKILL_LIST = [
     energyCost: 15,
     accuracy: 100,
     targetType: "single_enemy",
-    formulaText: "2.2 x DEF • Stun (25% + 5% per self buff & target debuff)",
+    formulaText: "1.7 x DEF • Stun (25% + 5% per self buff & target debuff)",
     description:
       "Attacks one enemy. Has a 25% chance of placing a [Stun] debuff for 1 turn. This chance increases by 5% for each buff on this Champion and debuff on the target.",
     computeRawHit({ stats }) {
-      return 2.2 * stats.def;
+      return 1.7 * stats.def;
     },
     onEachHit({ attacker, target, engine }) {
       if (target.currentHp <= 0) return;
@@ -2381,7 +2381,7 @@ export const SKILL_LIST = [
     targetType: "all_allies",
     formulaText: "Shield (6.5 x DEF) • [+DEF (60%)] & [Strengthen (25%)] (2T)",
     description:
-      "Places a 60% [Increase DEF], 25% [Strengthen] and [Shield] buff on all allies for 2 turns. The [Shield] is proportional to this Champion's DEF.\n[Spartan Unity]\n1 Spartan Ally: Removes all debuffs from all allies before placing buffs.\n2 Spartan Allies: Also increases value of Shield by 10% (max 40,000).\n3 Spartan Allies: Buffs placed by this skill cannot be removed or dispelled.",
+      "Places a 60% [Increase DEF], 25% [Strengthen] and [Shield] buff on all allies for 2 turns. The [Shield] is proportional to this character's DEF.\n[Spartan Unity]\n1 Spartan Ally: Removes all debuffs from all allies before placing buffs.\n2 Spartan Allies: Also increases value of Shield by 10% (max 40,000).\n3 Spartan Allies: Buffs placed by this skill cannot be removed or dispelled.",
     execute({ attacker, engine }) {
       const spartanCount = engine.getSpartanAlliesCount(attacker);
       const allies = engine.getLivingAlliesOf(attacker);
@@ -2424,11 +2424,11 @@ export const SKILL_LIST = [
     energyCost: 45,
     accuracy: 100,
     targetType: "all_enemies",
-    formulaText: "3.3 x DEF (AoE) • [Provoke] Enemies (1T) • [Block Damage] Self (1T) • [Ally Protection] (3T)",
+    formulaText: "2.2 x DEF (AoE) • [Provoke] Enemies (1T) • [Block Damage] Self (1T) • [Ally Protection] (3T)",
     description:
-      "Attacks all enemies. Places a [Provoke] debuff for 1 turn and a [Block Damage] buff on this Champion for 1 turn. Then places a 50% [Ally Protection] buff on all allies for 3 turns.",
+      "Attacks all enemies. Places a [Provoke] debuff for 1 turn and a [Block Damage] buff on this character for 1 turn. Then places a 50% [Ally Protection] buff on all allies for 3 turns.",
     computeRawHit({ stats }) {
-      return 3.3 * stats.def;
+      return 2.2 * stats.def;
     },
     onBeforeSkill({ attacker, engine }) {
       engine.statusManager.applyStatus(attacker, attacker, "block_damage", { duration: 1 });
@@ -2487,7 +2487,7 @@ export const SKILL_LIST = [
     targetType: "all_allies",
     formulaText: "Shield (100% Kelly MAX HP) • Heal 25% MAX HP • [+ATK (50%)] (2T)",
     description:
-      "Places a [Shield] buff on all allies equal to this Champion's MAX HP. Then, heals all allies by 25% of their MAX HP and places a 50% [Increase ATK] buff on all allies for 2 turns.\n[Spartan Unity]\n1 Spartan Ally: Shield cannot be removed.\n2 Spartan Allies: Also places [Strengthen (25%)] and [Fortify (15%)] for 2 turns.\n3 Spartan Allies: Allies deal +10% more damage for each buff placed by this skill.",
+      "Places a [Shield] buff on all allies equal to this character's MAX HP. Then, heals all allies by 25% of their MAX HP and places a 50% [Increase ATK] buff on all allies for 2 turns.\n[Spartan Unity]\n1 Spartan Ally: Shield cannot be removed.\n2 Spartan Allies: Also places [Strengthen (25%)] and [Fortify (15%)] for 2 turns.\n3 Spartan Allies: Allies deal +10% more damage for each buff placed by this skill.",
     execute({ attacker, engine }) {
       const spartanCount = engine.getSpartanAlliesCount(attacker);
       const shieldVal = attacker.effectiveMaxHp;
@@ -2571,11 +2571,11 @@ export const SKILL_LIST = [
     energyCost: 15,
     accuracy: 100,
     targetType: "single_enemy",
-    formulaText: "3.2 x ATK • Always Critical • [-ATK (50%)] (2T or 3T AoE on kill)",
+    formulaText: "1.2 x ATK • Always Critical • [-ATK (50%)] (2T or 3T AoE on kill)",
     description:
       "Attacks one enemy. This attack is always critical. Places a 50% [Decrease ATK] debuff on the target for 2 turns. If the target was killed, instead places a 50% [Decrease ATK] debuff on all enemies for 3 turns. This debuff cannot be blocked.",
     computeRawHit({ stats }) {
-      return 3.2 * stats.atk;
+      return 1.2 * stats.atk;
     },
     onAfterAttack({ attacker, target, engine }) {
       if (target && target.currentHp <= 0) {
@@ -2660,9 +2660,9 @@ export const SKILL_LIST = [
     energyCost: 50,
     accuracy: 100,
     targetType: "all_enemies",
-    formulaText: "4.4 x ATK (x2 hits) • Always Crit • Ignores 15%/30% DEF • [-DEF (60%) & -ATK (50%)] (3T)",
+    formulaText: "1.6 x ATK (x2 hits) • Always Crit • Ignores 15%/30% DEF • [-DEF (60%) & -ATK (50%)] (3T)",
     description:
-      "Attacks all enemies. This attack is always critical. Ignores 15% of target DEF. Then, attacks all enemies again (ignoring an additional 15% DEF). Places a 60% [Decrease DEF] and 50% [Decrease ATK] debuff on all enemies for 3 turns.\n[Spartan Unity]\n1 Spartan Ally: Before attacking, steals all buffs from all enemies.\n2 Spartan Allies: Ignores an additional 5% DEF for each buff on Linda.\n3 Spartan Allies: Damage increases by Shield value (up to 500%).",
+      "Attacks all enemies. This attack is always critical. Ignores 15% of target DEF. Then, attacks all enemies again (ignoring an additional 15% DEF). Places a 60% [Decrease DEF] and 50% [Decrease ATK] debuff on all enemies for 3 turns.\n[Spartan Unity]\n1 Spartan Ally: Before attacking, steals all buffs from all enemies.\n2 Spartan Allies: Ignores an additional 5% DEF for each buff on Linda.\n3 Spartan Allies: Damage increases proportional to Shield value (up to 500%).",
     onBeforeSkill({ attacker, engine }) {
       const spartanCount = engine.getSpartanAlliesCount(attacker);
       if (spartanCount >= 1) {
@@ -2681,7 +2681,7 @@ export const SKILL_LIST = [
       return Math.min(1.0, baseIgnore);
     },
     computeRawHit({ attacker, stats, engine }) {
-      let mult = 4.4;
+      let mult = 1.6;
       const spartanCount = engine ? engine.getSpartanAlliesCount(attacker) : 0;
       if (spartanCount >= 3 && attacker.shieldHp > 0) {
         const shieldRatio = attacker.shieldHp / attacker.effectiveMaxHp;
