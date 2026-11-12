@@ -18,11 +18,11 @@ export const SKILL_LIST = [
     accuracy: null,
     targetType: "self",
     isUniversal: true,
-    formulaText: "Regain 1/5 Max Energy • Full Defense",
+    formulaText: "Regain 2/5 Max Energy • Full Defense",
     description:
-      "Regain a small amount of energy (1/5 of your total), but keep your guard up (full defense).",
+      "Regain a moderate amount of energy (2/5 of your total), while keeping your guard up (full defense).",
     execute({ attacker, engine }) {
-      const gained = Math.floor(attacker.maxEnergy / 5);
+      const gained = Math.floor((attacker.maxEnergy * 2) / 5);
       attacker.currentEnergy = Math.min(attacker.maxEnergy, attacker.currentEnergy + gained);
       attacker.stance = "wait";
       engine.log(
@@ -41,11 +41,11 @@ export const SKILL_LIST = [
     accuracy: null,
     targetType: "self",
     isUniversal: true,
-    formulaText: "Regain 1/3 Max Energy • Halved Defense",
+    formulaText: "Regain 2/3 Max Energy • Halved Defense",
     description:
-      "Regain a large amount of energy (1/3 of your total), but let your guard down (halved defense until your next turn).",
+      "Regain a large amount of energy (2/3 of your total), but let your guard down (halved defense until your next turn).",
     execute({ attacker, engine }) {
-      const gained = Math.floor(attacker.maxEnergy / 3);
+      const gained = Math.floor((attacker.maxEnergy * 2) / 3);
       attacker.currentEnergy = Math.min(attacker.maxEnergy, attacker.currentEnergy + gained);
       attacker.stance = "rest";
       engine.log(
@@ -2244,8 +2244,9 @@ export const SKILL_LIST = [
     onAfterAttack({ attacker, target, critHitsCount, engine, isRepeat }) {
       if (critHitsCount > 0 && !isRepeat && target && target.currentHp > 0) {
         const repeatSkill = { ...this, hits: 2, _isRepeat: true };
-        engine.logPassive(
-          `[Direct Shot] Critical hit landed! ${attacker.name} repeats [Direct Shot]!`
+        engine.log(
+          `[Direct Shot] Critical hit landed! ${attacker.name} repeats [Direct Shot]!`,
+          "special"
         );
         engine.queueFollowUpAttack(
           () => {

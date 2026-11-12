@@ -86,10 +86,8 @@ export class StatusManager {
     ) {
       const healAmt = Math.max(1, Math.floor(target.effectiveMaxHp * 0.1));
       target.currentHp = Math.min(target.effectiveMaxHp, target.currentHp + healAmt);
-      this.engine.log(
-        `[${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP).`,
-        "heal",
-        { isSkill: false }
+      this.engine.logPassive(
+        `[${target.name}] Lethal Lava absorbs [Burn] and heals ${healAmt} HP (10% MAX HP).`
       );
       return false;
     }
@@ -108,10 +106,12 @@ export class StatusManager {
           source.teamId !== target.teamId &&
           this.engine.hasAbilityFlag(target, "counterOnSpdDownAttempt")
         ) {
-          this.engine.logPassive(
-            `[Passive] [${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`
-          );
-          this.engine.executeCounterSkill(target, "auric_lance", source.id);
+          this.engine.withLogStage(3, () => {
+            this.engine.logPassive(
+              `[${target.name}] Steadfast Knight triggers against [${def.name}] attempt and counterattacks with [Auric Lance]!`
+            );
+            this.engine.executeCounterSkill(target, "auric_lance", source.id);
+          });
         }
         return false;
       }
@@ -133,7 +133,7 @@ export class StatusManager {
           this.engine.log(
             `${target.name}'s [Unbroken Sheath] blocked [${def.name}].`,
             "info",
-            { isSkill: false }
+            { isSkill: false, stage: 3 }
           );
         }
         return false;
@@ -148,18 +148,20 @@ export class StatusManager {
         source.id !== target.id &&
         this.engine.rng() < 0.5
       ) {
-        this.engine.log(
-          `${target.name}'s [Wand of Submission] reflects [${def.name}] back onto ${source.name}!`,
-          "special",
-          { isSkill: false }
-        );
-        return this.applyStatus(target, source, statusId, {
-          duration,
-          stacks,
-          isProtected,
-          bypassImmunity,
-          silent,
-          isReflected: true,
+        return this.engine.withLogStage(3, () => {
+          this.engine.log(
+            `${target.name}'s [Wand of Submission] reflects [${def.name}] back onto ${source.name}!`,
+            "special",
+            { isSkill: false, stage: 3 }
+          );
+          return this.applyStatus(target, source, statusId, {
+            duration,
+            stacks,
+            isProtected,
+            bypassImmunity,
+            silent,
+            isReflected: true,
+          });
         });
       }
     }
@@ -183,7 +185,7 @@ export class StatusManager {
         this.engine.log(
           `[${source.name}] Blossoming Spore Rod doubles [${def.name}]!`,
           "special",
-          { isSkill: false }
+          { isSkill: false, stage: 3 }
         );
       }
     }
@@ -264,13 +266,17 @@ export class StatusManager {
         .getLivingEnemiesOf(target)
         .filter((u) => this.engine.hasAbilityFlag(u, "applyBloodDueOnDebuff"));
       if (opposingAlniths.length > 0) {
-        this.engine.addBloodDueStack(opposingAlniths[0], target, 1);
+        this.engine.withLogStage(3, () => {
+          this.engine.addBloodDueStack(opposingAlniths[0], target, 1);
+        });
       }
     }
 
     // Solanar the Gleaming's Scholar of Sun / Solar Nova: 20% chance to counterattack with [Solar Nova] when any character receives a buff
     if (def.category === "buff" && this.engine.turnNumber > 0) {
-      this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}] buff`);
+      this.engine.withLogStage(3, () => {
+        this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}] buff`);
+      });
     }
 
     return true;
@@ -309,7 +315,9 @@ export class StatusManager {
       (def.category === "buff" ||
         ["war_armor", "brood_atk_boost", "forever_waiting_guard"].includes(statusId))
     ) {
-      this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}]`);
+      this.engine.withLogStage(3, () => {
+        this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}]`);
+      });
     }
   }
 

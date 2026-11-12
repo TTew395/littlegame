@@ -2,10 +2,10 @@
  * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
-import { initializeGameContent } from "./data/index.js?v=13";
+import { initializeGameContent } from "./data/index.js?v=14";
 import { Registry } from "./engine/Registry.js";
-import { BattleEngine } from "./engine/BattleEngine.js?v=13";
-import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=13";
+import { BattleEngine } from "./engine/BattleEngine.js?v=14";
+import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=14";
 
 initializeGameContent();
 
