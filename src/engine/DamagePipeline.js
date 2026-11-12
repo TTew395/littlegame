@@ -177,9 +177,12 @@ export class DamagePipeline {
       if (this.engine.rng() < weakChance) {
         isCrit = false;
         rawDamage *= 0.7;
-        this.engine.logPassive(
-          `[Weak Hit] ${target.name}'s Luck Is On My Side glanced the incoming blow (-30% DMG)!`
-        );
+        if (!target._weakHitLoggedThisSkill) {
+          target._weakHitLoggedThisSkill = true;
+          this.engine.logPassive(
+            `[Weak Hit] ${target.name}'s Luck Is On My Side glanced the incoming blow (-30% DMG)!`
+          );
+        }
       }
     }
 

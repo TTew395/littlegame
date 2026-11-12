@@ -1020,8 +1020,8 @@ export const SKILL_LIST = [
     computeRawHit({ stats }) {
       return 1.0 * stats.atk;
     },
-    onEachHit({ attacker, target, engine }) {
-      if (target.currentHp > 0 && engine.rng() <= 0.8) {
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && (engine.rng() <= 0.8 || engine.rng() <= 0.8 || engine.rng() <= 0.8)) {
         engine.statusManager.applyStatus(attacker, target, "def_down", { duration: 2 });
       }
     },
@@ -2244,13 +2244,12 @@ export const SKILL_LIST = [
     onAfterAttack({ attacker, target, critHitsCount, engine, isRepeat }) {
       if (critHitsCount > 0 && !isRepeat && target && target.currentHp > 0) {
         const repeatSkill = { ...this, hits: 2, _isRepeat: true };
+        engine.logPassive(
+          `[Direct Shot] Critical hit landed! ${attacker.name} repeats [Direct Shot]!`
+        );
         engine.queueFollowUpAttack(
           () => {
             if (attacker.currentHp <= 0 || target.currentHp <= 0) return;
-            engine.log(
-              `[Normal Attack] [Direct Shot] Critical hit landed! ${attacker.name} repeats [Direct Shot]!`,
-              "normal_attack"
-            );
             engine.runSkillResolution(attacker, repeatSkill, target.id, {
               isFreeCounter: false,
               isTeamUp: false,
@@ -2276,7 +2275,7 @@ export const SKILL_LIST = [
     formulaText: "3.8 x ATK (AoE) • [+Shatter] Self (2T) • [-DEF (60%)] & [Weaken (25%)] (2T)",
     description:
       "Attacks all enemies. Places a 60% [Decrease DEF] and 25% [Weaken] debuff for 2 turns. Before attacking, places a 15% [Shatter] buff on this Champion for 2 turns.",
-    onBeforeAttack({ attacker, engine }) {
+    onBeforeSkill({ attacker, engine }) {
       engine.statusManager.applyStatus(attacker, attacker, "shatter", { duration: 2 });
     },
     computeRawHit({ stats }) {
