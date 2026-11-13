@@ -2,10 +2,10 @@
  * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
-import { initializeGameContent } from "./data/index.js?v=14";
+import { initializeGameContent } from "./data/index.js?v=15";
 import { Registry } from "./engine/Registry.js";
-import { BattleEngine } from "./engine/BattleEngine.js?v=14";
-import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=14";
+import { BattleEngine } from "./engine/BattleEngine.js?v=15";
+import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=15";
 
 initializeGameContent();
 
@@ -80,17 +80,21 @@ class GameApp {
   constructor() {
     this.currentView = "hub"; // "hub" | "battle"
     this.engine = null;
+    this.selectedMoveId = null;
     this.selectedTargetId = null;
     this.inspectedUnitId = null;
     this.autoBossAi = true;
 
-    // Hub state: player's selected team (up to 6 characters) & selected boss
+    // Hub state: player's selected team (up to 6 characters) & opposing team (up to 6 champions or bosses)
     this.selectedTeam = [
       { characterId: "karnage_the_anarch", itemId: "anarch_sigil" },
       { characterId: "byun", itemId: "kawabunga_coffee" },
       { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
       { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
       { characterId: "debt_bearer_alnith", itemId: "sharp_claws" },
+    ];
+    this.selectedEnemyTeam = [
+      { characterId: "antikhonor_broken_god", itemId: "none" },
     ];
     this.selectedBossEncounterId = "raid_antikhonor";
     this.lastEncounterConfig = null;
@@ -150,6 +154,7 @@ class GameApp {
   // =========================================================================
   renderHub() {
     this.renderSelectedTeamSlots();
+    this.renderSelectedEnemyTeamSlots();
     this.renderCharacterPool();
     this.renderBossSelectionGrid();
   }
@@ -166,7 +171,7 @@ class GameApp {
     const allItems = Registry.getAllItems();
 
     if (this.selectedTeam.length === 0) {
-      container.innerHTML = `<div class="empty-team-msg">No characters selected. Click characters below to add up to 6 members to your team.</div>`;
+      container.innerHTML = `<div class="empty-team-msg">No characters selected. Click "+ Team 1" on any character below to add up to 6 members.</div>`;
       return;
     }
 
@@ -186,7 +191,7 @@ class GameApp {
         return `
           <div class="team-slot-card">
             <div class="slot-top">
-              <span class="unit-code-badge">${charDef.avatar}</span>
+              <span class="unit-code-badge ${charDef.isBoss ? "boss" : ""}">${charDef.avatar}</span>
               <div class="slot-info">
                 <strong>${idx + 1}. ${charDef.name}</strong>
                 <small>${charDef.types.join(" / ")} • HP ${charDef.stats.hp} • SPD ${charDef.stats.spd}</small>
@@ -219,47 +224,82 @@ class GameApp {
     });
   }
 
-  canAddCharacterToTeam(charDef) {
-    if (!charDef) return { allowed: false, reason: "Invalid character" };
-    if (this.selectedTeam.length >= 6) {
-      return { allowed: false, reason: "Team Full (6/6)" };
+  renderSelectedEnemyTeamSlots() {
+    const container = document.getElementById("selected-enemy-team-slots");
+    const countLabel = document.getElementById("enemy-team-count-label");
+    if (!container) return;
+
+    if (countLabel) {
+      countLabel.textContent = String(this.selectedEnemyTeam.length);
     }
-    if (this.selectedTeam.some((slot) => slot.characterId === charDef.id)) {
-      return { allowed: false, reason: "Already in Team" };
+
+    const allItems = Registry.getAllItems();
+
+    if (this.selectedEnemyTeam.length === 0) {
+      container.innerHTML = `<div class="empty-team-msg">No opponents selected. Click Boss cards below or click "+ Opponent" on any Champion/Boss in the pool to add up to 6 opponents.</div>`;
+      return;
     }
-    const teamHasBoss = this.selectedTeam.some(
-      (slot) => Registry.getCharacter(slot.characterId)?.isBoss
-    );
-    const teamHasRegular = this.selectedTeam.some(
-      (slot) => !Registry.getCharacter(slot.characterId)?.isBoss
-    );
-    if (charDef.isBoss && teamHasRegular) {
-      return { allowed: false, reason: "Cannot Mix Bosses & Champions" };
-    }
-    if (!charDef.isBoss && teamHasBoss) {
-      return { allowed: false, reason: "Cannot Mix Bosses & Champions" };
-    }
-    return { allowed: true, reason: "+ Add to Team" };
+
+    container.innerHTML = this.selectedEnemyTeam
+      .map((slot, idx) => {
+        const charDef = Registry.getCharacter(slot.characterId);
+        if (!charDef) return "";
+        const itemOptions = allItems
+          .map(
+            (it) =>
+              `<option value="${it.id}" ${it.id === (slot.itemId || "none") ? "selected" : ""}>${
+                it.tier ? `[${it.tier}] ` : ""
+              }${it.name}</option>`
+          )
+          .join("");
+
+        return `
+          <div class="team-slot-card enemy-slot-card">
+            <div class="slot-top">
+              <span class="unit-code-badge ${charDef.isBoss ? "boss" : ""}">${charDef.avatar}</span>
+              <div class="slot-info">
+                <strong>${idx + 1}. ${charDef.name}</strong>
+                <small>${charDef.types.join(" / ")} • HP ${charDef.stats.hp} • SPD ${charDef.stats.spd}</small>
+              </div>
+              <button type="button" class="slot-remove-btn" data-remove-enemy-idx="${idx}" title="Remove opponent">Remove</button>
+            </div>
+            <select class="slot-item-select" data-enemy-slot-idx="${idx}">
+              ${itemOptions}
+            </select>
+          </div>
+        `;
+      })
+      .join("");
+
+    container.querySelectorAll("[data-remove-enemy-idx]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.removeEnemyIdx);
+        this.selectedEnemyTeam.splice(idx, 1);
+        this.renderHub();
+      });
+    });
+
+    container.querySelectorAll("[data-enemy-slot-idx]").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const idx = Number(sel.dataset.enemySlotIdx);
+        if (this.selectedEnemyTeam[idx]) {
+          this.selectedEnemyTeam[idx].itemId = sel.value;
+        }
+      });
+    });
   }
 
-  validateTeamRules(team) {
+  canAddCharacterToTeam(charDef, team = this.selectedTeam, labelPrefix = "+ Team 1") {
+    if (!charDef) return { allowed: false, reason: "Invalid character" };
+    if (team.length >= 6) {
+      return { allowed: false, reason: "Full (6/6)" };
+    }
+    return { allowed: true, reason: labelPrefix };
+  }
+
+  validateTeamRules(team, teamLabel = "your team") {
     if (!team || team.length === 0) {
-      return { valid: false, error: "Please add at least 1 character to your team before launching a battle." };
-    }
-    const seen = new Set();
-    let hasBoss = false;
-    let hasRegular = false;
-    for (const slot of team) {
-      if (seen.has(slot.characterId)) {
-        return { valid: false, error: "Duplicate characters are not allowed on the same team." };
-      }
-      seen.add(slot.characterId);
-      const def = Registry.getCharacter(slot.characterId);
-      if (def?.isBoss) hasBoss = true;
-      else hasRegular = true;
-    }
-    if (hasBoss && hasRegular) {
-      return { valid: false, error: "Players cannot mix bosses with regular champions in teams." };
+      return { valid: false, error: `Please add at least 1 character or boss to ${teamLabel} before launching a battle.` };
     }
     return { valid: true };
   }
@@ -278,12 +318,13 @@ class GameApp {
           .map((id) => Registry.getAbility(id)?.name)
           .filter(Boolean)
           .join(", ");
-        const check = this.canAddCharacterToTeam(c);
+        const checkTeam1 = this.canAddCharacterToTeam(c, this.selectedTeam, "+ Team 1");
+        const checkTeam2 = this.canAddCharacterToTeam(c, this.selectedEnemyTeam, "+ Opponent");
 
         return `
           <div class="pool-char-card ${c.isBoss ? "pool-boss" : ""}">
             <div class="pool-card-head">
-              <span class="unit-code-badge">${c.avatar}</span>
+              <span class="unit-code-badge ${c.isBoss ? "boss" : ""}">${c.avatar}</span>
               <div>
                 <h4>${c.name}</h4>
                 <small>${c.role} • ${c.types.join("/")}</small>
@@ -293,9 +334,14 @@ class GameApp {
               HP ${c.stats.hp} | EN ${c.stats.energy} | ATK ${c.stats.atk} | DEF ${c.stats.def}% | SPD ${c.stats.spd}
             </div>
             <div class="pool-abilities">Passive: ${abilities || "None"}</div>
-            <button type="button" class="action-btn add-char-btn" data-char-id="${c.id}" ${!check.allowed ? "disabled" : ""}>
-              ${check.reason}
-            </button>
+            <div class="pool-btn-row">
+              <button type="button" class="action-btn add-char-btn" data-char-id="${c.id}" ${!checkTeam1.allowed ? "disabled" : ""}>
+                ${checkTeam1.reason}
+              </button>
+              <button type="button" class="action-btn add-enemy-char-btn" data-enemy-char-id="${c.id}" ${!checkTeam2.allowed ? "disabled" : ""}>
+                ${checkTeam2.reason}
+              </button>
+            </div>
           </div>
         `;
       })
@@ -305,9 +351,23 @@ class GameApp {
       btn.addEventListener("click", () => {
         const charId = btn.dataset.charId;
         const def = Registry.getCharacter(charId);
-        const check = this.canAddCharacterToTeam(def);
+        const check = this.canAddCharacterToTeam(def, this.selectedTeam, "+ Team 1");
         if (!check.allowed) return;
         this.selectedTeam.push({
+          characterId: charId,
+          itemId: def?.defaultItemId || "none",
+        });
+        this.renderHub();
+      });
+    });
+
+    container.querySelectorAll(".add-enemy-char-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const charId = btn.dataset.enemyCharId;
+        const def = Registry.getCharacter(charId);
+        const check = this.canAddCharacterToTeam(def, this.selectedEnemyTeam, "+ Opponent");
+        if (!check.allowed) return;
+        this.selectedEnemyTeam.push({
           characterId: charId,
           itemId: def?.defaultItemId || "none",
         });
@@ -322,13 +382,16 @@ class GameApp {
 
     container.innerHTML = BOSS_ENCOUNTERS.map((enc) => {
       const bossDef = Registry.getCharacter(enc.bossId);
-      const isSelected = enc.id === this.selectedBossEncounterId;
+      const countInEnemyTeam = this.selectedEnemyTeam.filter(
+        (s) => s.characterId === enc.bossId
+      ).length;
+      const isSelected = countInEnemyTeam > 0;
       return `
         <div class="boss-select-card ${isSelected ? "selected" : ""}" data-enc-id="${enc.id}">
           <div class="boss-select-top">
             <span class="unit-code-badge boss">${bossDef?.avatar || "BOSS"}</span>
             <div>
-              <h4>${enc.name}</h4>
+              <h4>${enc.name} ${isSelected ? `<span class="boss-selected-pill">Selected${countInEnemyTeam > 1 ? ` x${countInEnemyTeam}` : ""}</span>` : ""}</h4>
               <small>${enc.recommended} • HP ${bossDef?.stats.hp} • DEF ${bossDef?.stats.def}% • SPD ${bossDef?.stats.spd}</small>
             </div>
           </div>
@@ -339,48 +402,82 @@ class GameApp {
 
     container.querySelectorAll(".boss-select-card").forEach((card) => {
       card.addEventListener("click", () => {
-        this.selectedBossEncounterId = card.dataset.encId;
-        this.renderBossSelectionGrid();
+        const encId = card.dataset.encId;
+        this.selectedBossEncounterId = encId;
+        const enc = BOSS_ENCOUNTERS.find((e) => e.id === encId);
+        if (!enc) return;
+
+        const existingIdx = this.selectedEnemyTeam.findIndex(
+          (s) => s.characterId === enc.bossId
+        );
+        if (existingIdx >= 0) {
+          this.selectedEnemyTeam.splice(existingIdx, 1);
+        } else if (this.selectedEnemyTeam.length < 6) {
+          const bossDef = Registry.getCharacter(enc.bossId);
+          this.selectedEnemyTeam.push({
+            characterId: enc.bossId,
+            itemId: bossDef?.defaultItemId || "none",
+          });
+        }
+        this.renderHub();
       });
     });
   }
 
+  buildEnemyTeamForLaunch() {
+    if (this.selectedEnemyTeam.length === 1) {
+      const singleId = this.selectedEnemyTeam[0].characterId;
+      const matchingEnc = BOSS_ENCOUNTERS.find((e) => e.bossId === singleId);
+      if (matchingEnc && matchingEnc.enemyTeam.length > 1) {
+        return [
+          { ...this.selectedEnemyTeam[0] },
+          ...matchingEnc.enemyTeam.slice(1).map((slot) => ({ ...slot })),
+        ];
+      }
+    }
+    return this.selectedEnemyTeam.map((slot) => ({ ...slot }));
+  }
+
   launchBossRaidFromHub() {
-    const check = this.validateTeamRules(this.selectedTeam);
-    if (!check.valid) {
-      alert(check.error);
+    const check1 = this.validateTeamRules(this.selectedTeam, "Team 1");
+    if (!check1.valid) {
+      alert(check1.error);
       return;
     }
-    const enc =
-      BOSS_ENCOUNTERS.find((e) => e.id === this.selectedBossEncounterId) ||
-      BOSS_ENCOUNTERS[0];
+    const check2 = this.validateTeamRules(this.selectedEnemyTeam, "the Opposing Force");
+    if (!check2.valid) {
+      alert(check2.error);
+      return;
+    }
 
     this.startEncounter({
-      mode: enc.id,
+      mode: "custom_encounter",
       team1: [...this.selectedTeam],
-      team2: [...enc.enemyTeam],
+      team2: this.buildEnemyTeamForLaunch(),
     });
   }
 
   launchPvpMatchFromHub() {
-    const check = this.validateTeamRules(this.selectedTeam);
-    if (!check.valid) {
-      alert(check.error);
+    const check1 = this.validateTeamRules(this.selectedTeam, "Team 1");
+    if (!check1.valid) {
+      alert(check1.error);
       return;
     }
-    // Opponent squad for PvP match
-    const defaultOpponentSquad = [
-      { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
-      { characterId: "byun", itemId: "kawabunga_coffee" },
-      { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
-      { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
-      { characterId: "the_calamitus", itemId: "death_sickle" },
-    ].slice(0, Math.max(1, this.selectedTeam.length));
+    const enemySquad =
+      this.selectedEnemyTeam.length > 0
+        ? this.buildEnemyTeamForLaunch()
+        : [
+            { characterId: "karnage_the_anarch", itemId: "executioner_lens" },
+            { characterId: "byun", itemId: "kawabunga_coffee" },
+            { characterId: "marius_the_gallant", itemId: "shield_of_the_captain" },
+            { characterId: "solanar_the_gleaming", itemId: "fire_ruby" },
+            { characterId: "the_calamitus", itemId: "death_sickle" },
+          ].slice(0, Math.max(1, this.selectedTeam.length));
 
     this.startEncounter({
       mode: "squad_pvp",
       team1: [...this.selectedTeam],
-      team2: defaultOpponentSquad,
+      team2: enemySquad,
     });
   }
 
@@ -407,14 +504,16 @@ class GameApp {
     if (!this.engine) return;
     const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
     if (activeUnit) {
-      const enemies = this.engine.getLivingEnemiesOf(activeUnit);
-      const currentTarget = this.engine.getUnitById(this.selectedTargetId);
-      if (
-        !currentTarget ||
-        currentTarget.currentHp <= 0 ||
-        currentTarget.teamId === activeUnit.teamId
-      ) {
-        this.selectedTargetId = enemies[0]?.id || null;
+      if (syncInspectorToActive) {
+        this.selectedMoveId = null;
+        this.selectedTargetId = null;
+      } else if (this.selectedMoveId) {
+        const moves = this.engine.getAvailableMovesForUnit(activeUnit);
+        const currentMove = moves.find((m) => m.id === this.selectedMoveId && m.usable);
+        if (!currentMove) {
+          this.selectedMoveId = null;
+          this.selectedTargetId = null;
+        }
       }
       if (
         syncInspectorToActive ||
@@ -424,6 +523,21 @@ class GameApp {
         this.inspectedUnitId = activeUnit.id;
       }
     }
+  }
+
+  isUnitValidTargetForMove(activeUnit, move, candidateUnit) {
+    if (!activeUnit || !move || !candidateUnit) return false;
+    if (move.targetType === "self") {
+      return candidateUnit.id === activeUnit.id && candidateUnit.currentHp > 0;
+    }
+    if (move.targetType === "all_allies") {
+      return candidateUnit.teamId === activeUnit.teamId && candidateUnit.currentHp > 0;
+    }
+    if (move.targetType === "any_unit") {
+      return true;
+    }
+    // Default ("single_enemy", "all_enemies", etc.): living enemy
+    return candidateUnit.teamId !== activeUnit.teamId && candidateUnit.currentHp > 0;
   }
 
   canLocalUserControlUnit(unit) {
@@ -527,6 +641,32 @@ class GameApp {
 
     document.getElementById("clear-team-btn")?.addEventListener("click", () => {
       this.selectedTeam = [];
+      this.renderHub();
+    });
+
+    // Hub Opposing Force Preset Buttons
+    document.getElementById("enemy-preset-champions-btn")?.addEventListener("click", () => {
+      this.selectedEnemyTeam = [
+        { characterId: "john_117", itemId: "executioner_lens" },
+        { characterId: "fred_104", itemId: "shield_of_the_captain" },
+        { characterId: "kelly_087", itemId: "kawabunga_coffee" },
+        { characterId: "linda_034", itemId: "sharp_claws" },
+        { characterId: "the_calamitus", itemId: "death_sickle" },
+      ];
+      this.renderHub();
+    });
+
+    document.getElementById("enemy-preset-bosses-btn")?.addEventListener("click", () => {
+      this.selectedEnemyTeam = [
+        { characterId: "antikhonor_broken_god", itemId: "none" },
+        { characterId: "theridine_great_septimus", itemId: "none" },
+        { characterId: "ternax_hellfire", itemId: "none" },
+      ];
+      this.renderHub();
+    });
+
+    document.getElementById("clear-enemy-team-btn")?.addEventListener("click", () => {
+      this.selectedEnemyTeam = [];
       this.renderHub();
     });
 
@@ -707,17 +847,23 @@ class GameApp {
         const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
 
         this.inspectedUnitId = uid;
-        if (clickedUnit && activeUnit) {
-          const hasAnyUnitMove = (activeUnit.activeMoveIds || []).some(
-            (mId) => Registry.getSkill(mId)?.targetType === "any_unit"
-          );
-          if (
-            hasAnyUnitMove ||
-            (clickedUnit.teamId !== activeUnit.teamId && clickedUnit.currentHp > 0)
-          ) {
+
+        if (clickedUnit && activeUnit && this.selectedMoveId && this.canLocalUserControlUnit(activeUnit)) {
+          const moves = this.engine.getAvailableMovesForUnit(activeUnit);
+          const selectedMove = moves.find((m) => m.id === this.selectedMoveId && m.usable);
+          if (selectedMove && this.isUnitValidTargetForMove(activeUnit, selectedMove, clickedUnit)) {
             this.selectedTargetId = uid;
+            const moveIdToCast = this.selectedMoveId;
+            this.selectedMoveId = null;
+            this.handlePlayerAction({
+              actorId: activeUnit.id,
+              moveId: moveIdToCast,
+              targetId: uid,
+            });
+            return;
           }
         }
+
         this.renderAll();
       });
     });
@@ -798,9 +944,19 @@ class GameApp {
 
   renderUnitCardHTML(unit) {
     const isActive = unit.id === this.engine.activeUnitId;
-    const isTarget = unit.id === this.selectedTargetId;
     const isInspected = unit.id === this.inspectedUnitId;
     const isDead = unit.currentHp <= 0;
+
+    const activeUnit = this.engine.getUnitById(this.engine.activeUnitId);
+    let isValidTarget = false;
+    if (activeUnit && this.selectedMoveId && this.canLocalUserControlUnit(activeUnit)) {
+      const moves = this.engine.getAvailableMovesForUnit(activeUnit);
+      const selectedMove = moves.find((m) => m.id === this.selectedMoveId && m.usable);
+      if (selectedMove) {
+        isValidTarget = this.isUnitValidTargetForMove(activeUnit, selectedMove, unit);
+      }
+    }
+    const isTarget = isValidTarget || unit.id === this.selectedTargetId;
 
     const shieldHp = Math.max(0, unit.shieldHp || 0);
     const magmaHp = Math.max(0, unit.magmaShieldHp || 0);
@@ -853,13 +1009,89 @@ class GameApp {
 
     const mechanicBadges = this.renderBossMechanicCounters(unit);
 
+    const isSeptimus = unit.templateId === "theridine_great_septimus";
+    let septimusBarsHtml = "";
+    if (isSeptimus) {
+      const c = unit.customCounters || {};
+      const chargingBarsRemaining = c.chargingBarsRemaining || 0;
+      const maxChargingBars = c.maxChargingBars || 7;
+      const chargingBarMaxHp = c.chargingBarMaxHp || unit.effectiveMaxHp || 100;
+      const chargingCurrentHp = Math.max(0, c.chargingCurrentHp || 0);
+
+      let chargingBlockHtml = "";
+      if (chargingBarsRemaining > 0) {
+        const chargingSegments = [];
+        for (let i = 1; i <= maxChargingBars; i += 1) {
+          let fillPct = 0;
+          if (i < chargingBarsRemaining) {
+            fillPct = 100;
+          } else if (i === chargingBarsRemaining) {
+            fillPct = Math.max(0, Math.min(100, (chargingCurrentHp / chargingBarMaxHp) * 100));
+          }
+          chargingSegments.push(`
+            <div class="septimus-hp-segment charging" title="Charging Bar ${i}/${maxChargingBars}">
+              <div class="septimus-segment-fill charging" style="width:${fillPct.toFixed(1)}%"></div>
+            </div>
+          `);
+        }
+        chargingBlockHtml = `
+          <div class="bar-group septimus-charging-group">
+            <div class="bar-label">
+              <span class="charging-bar-title">Charging HP (Bar ${chargingBarsRemaining}/${maxChargingBars})</span>
+              <span class="hp-values-wrap">
+                <strong>${chargingCurrentHp}</strong> / ${chargingBarMaxHp} per bar (${(chargingBarsRemaining - 1) * chargingBarMaxHp + chargingCurrentHp} Charging HP)
+              </span>
+            </div>
+            <div class="hp-bar-track septimus-charging-track">
+              ${chargingSegments.join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      const hpBarsRemaining = c.hpBarsRemaining ?? 16;
+      const totalSegments = 16;
+      const barMaxHp = unit.effectiveMaxHp || 100;
+      const hpSegments = [];
+      for (let i = 1; i <= totalSegments; i += 1) {
+        let fillPct = 0;
+        if (i < hpBarsRemaining) {
+          fillPct = 100;
+        } else if (i === hpBarsRemaining && unit.currentHp > 0) {
+          fillPct = Math.max(0, Math.min(100, (unit.currentHp / barMaxHp) * 100));
+        }
+        hpSegments.push(`
+          <div class="septimus-hp-segment" title="Sacred HP Bar ${i}/${totalSegments}">
+            <div class="septimus-segment-fill" style="width:${fillPct.toFixed(1)}%"></div>
+          </div>
+        `);
+      }
+
+      septimusBarsHtml = `
+        ${chargingBlockHtml}
+        <div class="bar-group">
+          <div class="bar-label">
+            <span>Sacred HP (Bar ${hpBarsRemaining}/16 • 16 Segments)</span>
+            <span class="hp-values-wrap">
+              <strong>${unit.currentHp}</strong> / ${barMaxHp}
+              ${(unit.shieldHp || 0) > 0 ? `<span class="hp-shield-val">(+${unit.shieldHp} Shield)</span>` : ""}
+              ${(unit.magmaShieldHp || 0) > 0 ? `<span class="hp-magma-val">(+${unit.magmaShieldHp} Magma)</span>` : ""}
+            </span>
+          </div>
+          <div class="hp-bar-track septimus-segmented-track">
+            ${hpSegments.join("")}
+          </div>
+        </div>
+      `;
+    }
+
     return `
-      <div class="unit-card ${unit.isBoss ? "boss-card" : ""} ${unit.isSummon ? "summon-card" : ""} ${isActive ? "is-active" : ""} ${isTarget ? "is-target" : ""} ${isInspected ? "is-inspected" : ""} ${isDead ? "is-dead" : ""}" data-unit-id="${unit.id}">
+      <div class="unit-card ${unit.isBoss ? "boss-card" : ""} ${unit.isSummon ? "summon-card" : ""} ${isActive ? "is-active" : ""} ${isTarget ? "is-target" : ""} ${isValidTarget ? "is-valid-target" : ""} ${isInspected ? "is-inspected" : ""} ${isDead ? "is-dead" : ""}" data-unit-id="${unit.id}">
         <div class="unit-card-header">
           <div class="unit-avatar-badge">
             <span class="unit-code-badge ${unit.isBoss ? "boss" : ""}">${unit.avatar}</span>
             ${isActive ? `<span class="turn-indicator">ACTING</span>` : ""}
-            ${isTarget && !isDead ? `<span class="target-reticle">TARGET</span>` : ""}
+            ${isValidTarget && !isDead ? `<span class="target-reticle">CLICK TO TARGET</span>` : ""}
           </div>
           <div class="unit-title-block">
             <div class="unit-name-row">
@@ -878,9 +1110,13 @@ class GameApp {
           </div>
         </div>
 
+        ${
+          isSeptimus
+            ? septimusBarsHtml
+            : `
         <div class="bar-group">
           <div class="bar-label">
-            <span>HP ${unit.templateId === "theridine_great_septimus" ? `(Bar ${unit.customCounters?.hpBarsRemaining ?? 16}/16)` : ""}</span>
+            <span>HP</span>
             <span class="hp-values-wrap">
               <strong>${unit.currentHp}</strong> / ${unit.effectiveMaxHp}
               ${(unit.shieldHp || 0) > 0 ? `<span class="hp-shield-val">(+${unit.shieldHp} Shield)</span>` : ""}
@@ -895,6 +1131,8 @@ class GameApp {
             ${destroyedPctRaw > 0 ? `<div class="hp-bar-destroyed" style="width:${destroyedPct.toFixed(2)}%"></div>` : ""}
           </div>
         </div>
+        `
+        }
 
         ${
           !unit.isActionlessTotem
@@ -943,7 +1181,7 @@ class GameApp {
     if (!activeUnit) return;
 
     const moves = this.engine.getAvailableMovesForUnit(activeUnit);
-    const targetUnit = this.engine.getUnitById(this.selectedTargetId);
+    const selectedMove = moves.find((m) => m.id === this.selectedMoveId && m.usable);
     const canControl = this.canLocalUserControlUnit(activeUnit);
     const formName = activeUnit.forms?.[activeUnit.form]?.name || activeUnit.form;
     const lastSkillName = activeUnit.lastNonUniversalSkillId
@@ -956,7 +1194,11 @@ class GameApp {
         <div>
           <h3>${activeUnit.name}'s Turn <small>(${formName})</small></h3>
           <p>
-            Target: <strong>${targetUnit ? `${targetUnit.name} (${targetUnit.currentHp} HP)` : "Click an enemy unit"}</strong>
+            ${
+              selectedMove
+                ? `Selected Skill: <strong class="selected-skill-highlight">${selectedMove.name}</strong> — Click a highlighted target on the battlefield`
+                : `Step 1: <strong>Select a skill below</strong>, then click a target on the battlefield`
+            }
             • Skills Used: <strong>${activeUnit.skillsUsedCount || 0}</strong>
             • Last Skill: <strong>${lastSkillName}</strong>
           </p>
@@ -965,7 +1207,7 @@ class GameApp {
       <div class="actor-banner-right">
         ${
           canControl
-            ? `<span class="your-move-pill">Your Move</span>`
+            ? `<span class="your-move-pill">${selectedMove ? "Select Target" : "Select Skill"}</span>`
             : `<span class="waiting-turn-pill">${activeUnit.name} Acting...</span>`
         }
       </div>
@@ -988,8 +1230,9 @@ class GameApp {
         const disabledAttr = !m.usable || !canControl ? "disabled" : "";
         const universalClass = m.isUniversal ? "universal-move" : "character-move";
         const forcedClass = m.isForcedMove ? "forced-next-move" : "";
+        const selectedClass = this.selectedMoveId === m.id ? "is-selected-move" : "";
         return `
-          <button type="button" class="move-btn ${universalClass} ${forcedClass}" data-actor-id="${activeUnit.id}" data-move-id="${m.id}" ${disabledAttr}>
+          <button type="button" class="move-btn ${universalClass} ${forcedClass} ${selectedClass}" data-actor-id="${activeUnit.id}" data-move-id="${m.id}" ${disabledAttr}>
             <div class="move-btn-top">
               <span class="move-name">
                 ${m.isForcedMove ? "[NEXT] " : ""}${m.name}
@@ -1001,6 +1244,11 @@ class GameApp {
             </div>
             <div class="move-formula">${m.formulaText || m.category} ${m.accuracy ? `• ACC ${m.accuracy}%` : ""}</div>
             <div class="move-desc">${m.description}</div>
+            ${
+              this.selectedMoveId === m.id && m.usable
+                ? `<div class="move-selected-prompt">SELECTED — Click a highlighted target on the battlefield</div>`
+                : ""
+            }
             ${
               m.isForcedMove && m.usable
                 ? `<div class="move-queued-tag">REQUIRED FOLLOW-UP READY</div>`
@@ -1015,11 +1263,32 @@ class GameApp {
     deckEl.querySelectorAll(".move-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const moveId = btn.dataset.moveId;
-        this.handlePlayerAction({
-          actorId: activeUnit.id,
-          moveId,
-          targetId: this.selectedTargetId,
-        });
+        const moveObj = moves.find((m) => m.id === moveId && m.usable);
+        if (!moveObj) return;
+
+        // If already selected and the move is self/AoE/universal, clicking again casts it immediately as a convenience
+        if (
+          this.selectedMoveId === moveId &&
+          (moveObj.isUniversal ||
+            moveObj.targetType === "self" ||
+            moveObj.targetType === "all_allies" ||
+            moveObj.targetType === "all_enemies")
+        ) {
+          const defaultTargetId =
+            moveObj.targetType === "all_enemies"
+              ? this.engine.getLivingEnemiesOf(activeUnit)[0]?.id || activeUnit.id
+              : activeUnit.id;
+          this.selectedMoveId = null;
+          this.handlePlayerAction({
+            actorId: activeUnit.id,
+            moveId,
+            targetId: defaultTargetId,
+          });
+          return;
+        }
+
+        this.selectedMoveId = moveId;
+        this.renderAll();
       });
     });
   }

@@ -292,12 +292,13 @@ export const ABILITY_LIST = [
     name: "Almighty Immunity",
     cannotBeBlocked: true,
     description:
-      "Skills that deal damage based on ENEMY MAX HP cannot exceed 10% of the boss's MAX HP. Immune to [Stun], [Sleep], [Freeze], [Frozen], [Block Passive Skills] and [Heart-Melt] debuffs. Also immune to Turn skipping effects, Turn Meter reduction effects and [Block Passive Skills] debuffs.",
+      "Skills that deal damage based on ENEMY MAX HP cannot exceed 10% of the boss's MAX HP. Immune to [Stun], [Sleep], [Freeze], [Frozen], [Provoke], [Block Passive Skills] and [Heart-Melt] debuffs. Also immune to Turn skipping effects, Turn Meter reduction effects and [Block Passive Skills] debuffs.",
     immunities: [
       "stun",
       "sleep",
       "freeze",
       "frozen",
+      "provoke",
       "block_passive_skills",
       "heart_melt",
     ],
@@ -313,12 +314,13 @@ export const ABILITY_LIST = [
     name: "Molten Immunity",
     cannotBeBlocked: true,
     description:
-      "Skills that deal damage based on ENEMY MAX HP cannot exceed 10% of the boss's MAX HP. Immune to [Stun], [Sleep], [Freeze], [Frozen], [Block Passive Skills], [Heart-Melt], [Decrease ATK], [Decrease DEF], [Decrease SPD], and ATK reduction debuffs. Turn Meter reduction effects are decreased by 50% when used on Ternax.",
+      "Skills that deal damage based on ENEMY MAX HP cannot exceed 10% of the boss's MAX HP. Immune to [Stun], [Sleep], [Freeze], [Frozen], [Provoke], [Block Passive Skills], [Heart-Melt], [Decrease ATK], [Decrease DEF], [Decrease SPD], and ATK reduction debuffs. Turn Meter reduction effects are decreased by 50% when used on Ternax.",
     immunities: [
       "stun",
       "sleep",
       "freeze",
       "frozen",
+      "provoke",
       "block_passive_skills",
       "heart_melt",
       "atk_down",
@@ -624,15 +626,17 @@ export const ABILITY_LIST = [
     id: "godspawn",
     name: "Godspawn",
     description:
-      "Theridine has 16 HP bars of 50 HP each (MAX HP per bar is considered 50). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 5x Theridine's ATK (or 10x ATK per 50 HP charging bar broken during Im Anfang War die Tat). Stacks.",
+      "Theridine has 16 HP bars of 100 HP each (MAX HP per bar is considered 100). Whenever one of Theridine's HP bars is depleted, grants all enemies a communal Shield equal to 5x Theridine's ATK (or 10x ATK per additional charging bar broken during Im Anfang War die Tat). Stacks.",
     onBattleStart({ unit, engine }) {
       unit.customCounters.hpBarsRemaining = 16;
       unit.customCounters.maxHpBars = 16;
       unit.customCounters.chargingBarsRemaining = 0;
+      unit.customCounters.maxChargingBars = 7;
+      unit.customCounters.chargingCurrentHp = 0;
+      unit.customCounters.chargingBarMaxHp = unit.effectiveMaxHp || 100;
       unit.customCounters.chargingReactionsLeft = 0;
-      unit.customCounters.chargingBarHp = 50;
       engine.log(
-        `[${unit.name}] Godspawn manifests with 16 Sacred Health Bars (50 HP per bar).`,
+        `[${unit.name}] Godspawn manifests with 16 Sacred Health Bars (${unit.effectiveMaxHp || 100} HP per bar).`,
         "special"
       );
     },

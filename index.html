@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Little Game Test Server</title>
-  <link rel="stylesheet" href="./style.css?v=14" />
+  <link rel="stylesheet" href="./style.css?v=15" />
 </head>
 <body>
   <!-- TOP NAVIGATION BAR -->
@@ -56,23 +56,38 @@
         </div>
 
         <!-- AVAILABLE CHARACTER POOL -->
-        <div class="pool-header">Available Characters (Click to Add to Team)</div>
+        <div class="pool-header">Available Characters &amp; Bosses (Add to Team 1 or Opposing Force)</div>
         <div id="character-pool-grid" class="character-pool-grid"></div>
       </section>
 
-      <!-- RIGHT: CHOOSE BATTLE MODE (BOSSES OR PVP) -->
+      <!-- RIGHT: CHOOSE BATTLE MODE (OPPOSING FORCE + BOSSES OR PVP) -->
       <div class="hub-right-column">
-        <!-- BOSSES PANEL -->
+        <!-- OPPOSING FORCE / BOSSES PANEL -->
         <section class="hub-panel">
           <div class="hub-panel-header">
             <div>
-              <h2>2A. Attack Bosses</h2>
-              <p class="hub-sub">Select a Boss encounter and launch with your assembled team.</p>
+              <h2>2A. Assemble Opposing Force (Bosses &amp; Champions)</h2>
+              <p class="hub-sub">Select one or multiple Bosses or Champions to battle against locally (up to 6).</p>
+            </div>
+            <div class="hub-quick-btns">
+              <button id="enemy-preset-champions-btn" class="action-btn">Preset: 5 Champions</button>
+              <button id="enemy-preset-bosses-btn" class="action-btn">Preset: Multi-Boss</button>
+              <button id="clear-enemy-team-btn" class="action-btn">Clear Opponents</button>
             </div>
           </div>
+
+          <!-- SELECTED ENEMY TEAM SLOTS -->
+          <div class="selected-team-box enemy-team-box">
+            <div class="selected-team-header enemy-team-header">
+              <span>Opposing Force Roster (<span id="enemy-team-count-label">0</span>/6)</span>
+            </div>
+            <div id="selected-enemy-team-slots" class="selected-team-slots"></div>
+          </div>
+
+          <div class="pool-header">Raid Boss Encounters (Click to Toggle / Add Boss to Opposing Force)</div>
           <div id="boss-selection-grid" class="boss-selection-grid"></div>
           <div class="launch-bar">
-            <button id="launch-boss-raid-btn" class="launch-btn">Launch Selected Boss</button>
+            <button id="launch-boss-raid-btn" class="launch-btn">Launch Battle vs Opposing Force</button>
           </div>
         </section>
 
@@ -81,12 +96,12 @@
           <div class="hub-panel-header">
             <div>
               <h2>2B. Battle Other Players (WebRTC P2P or Local PvP)</h2>
-              <p class="hub-sub">Connect to another player via WebRTC DataChannels or launch a Squad PvP match.</p>
+              <p class="hub-sub">Connect to another player via WebRTC DataChannels or launch a Local Battle with your custom teams.</p>
             </div>
           </div>
           <div class="pvp-hub-controls">
             <button id="hub-open-webrtc-btn" class="action-btn highlight">Open WebRTC Room / SDP Connection</button>
-            <button id="launch-pvp-match-btn" class="launch-btn secondary">Launch Squad PvP Match</button>
+            <button id="launch-pvp-match-btn" class="launch-btn secondary">Launch Local Squad Match</button>
           </div>
         </section>
       </div>
@@ -114,7 +129,7 @@
             <div class="zone-header">
               <h2>Team 1 — Strike Force</h2>
               <div id="team-1-communal-shield"></div>
-              <span class="zone-hint">Click any unit to inspect</span>
+              <span class="zone-hint">Select a skill below, then click target</span>
             </div>
             <div id="team-1-container" class="units-list"></div>
           </section>
@@ -124,7 +139,7 @@
             <div class="zone-header">
               <h2>Team 2 — Opposing Force</h2>
               <div id="team-2-communal-shield"></div>
-              <span class="zone-hint">Click an enemy to target</span>
+              <span class="zone-hint">Select a skill below, then click target</span>
             </div>
             <div id="team-2-container" class="units-list"></div>
           </section>
@@ -151,7 +166,6 @@
             <span class="log-legend-pill counterattack">Counterattack</span>
             <span class="log-legend-pill ally-attack">Ally Attack</span>
             <span class="log-legend-pill passive">Passive</span>
-            <span class="log-legend-pill final-result">Final Result</span>
             <span class="log-legend-pill next-turn">Next Turn</span>
           </div>
           <div id="combat-log-list" class="combat-log-list"></div>
@@ -257,6 +271,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=14"></script>
+  <script type="module" src="./src/main.js?v=15"></script>
 </body>
 </html>

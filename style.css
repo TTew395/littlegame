@@ -245,6 +245,50 @@ body {
   text-transform: uppercase;
 }
 
+.enemy-team-box {
+  border-color: #7f1d1d;
+}
+
+.enemy-team-header {
+  color: #fca5a5;
+}
+
+.enemy-slot-card {
+  border-color: #7f1d1d;
+}
+
+.pool-btn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.pool-btn-row .action-btn {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
+.add-enemy-char-btn {
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.add-enemy-char-btn:hover:not(:disabled) {
+  border-color: var(--accent-crimson);
+  background: rgba(127, 29, 29, 0.35);
+}
+
+.boss-selected-pill {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--accent-gold);
+  color: #000;
+  font-weight: 800;
+}
+
 .selected-team-slots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -618,6 +662,16 @@ body {
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
 }
 
+.unit-card.is-valid-target {
+  border-color: var(--accent-crimson);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.55);
+}
+
+.unit-card.is-valid-target:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.65);
+}
+
 .unit-card.is-dead {
   opacity: 0.42;
   filter: grayscale(0.85);
@@ -757,6 +811,49 @@ body {
   flex-shrink: 0;
   background: linear-gradient(90deg, #10b981, #34d399);
   transition: width 0.25s ease;
+}
+
+.septimus-segmented-track,
+.septimus-charging-track {
+  height: 10px;
+  gap: 2px;
+  padding: 1px;
+  background: #060911;
+  border: 1px solid #1e293b;
+}
+
+.septimus-charging-track {
+  border-color: #f59e0b;
+  background: #1c1008;
+}
+
+.septimus-hp-segment {
+  flex: 1;
+  height: 100%;
+  background: #111827;
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.septimus-hp-segment.charging {
+  background: #291509;
+}
+
+.septimus-segment-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.2s ease;
+}
+
+.septimus-segment-fill.charging {
+  background: linear-gradient(90deg, #f59e0b, #fde047);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.7);
+}
+
+.charging-bar-title {
+  color: #fde047;
+  font-weight: 700;
 }
 
 .hp-bar-shield {
@@ -1011,6 +1108,23 @@ body {
 .move-btn.forced-next-move {
   border-color: var(--accent-gold);
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.move-btn.is-selected-move {
+  border-color: var(--accent-gold);
+  background: #232d4b;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+}
+
+.move-selected-prompt {
+  font-size: 0.7rem;
+  color: #fde047;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.selected-skill-highlight {
+  color: #fde047;
 }
 
 .move-btn-top {

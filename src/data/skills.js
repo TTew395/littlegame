@@ -1214,9 +1214,9 @@ export const SKILL_LIST = [
     cooldown: 4,
     accuracy: null,
     targetType: "self",
-    formulaText: "Requires <50% Total Bars (<=8 bars). Grants 7 Charging Bars + Restores 100% Enemy Energy",
+    formulaText: "Requires <50% Total Bars (<=8 bars). Grants 7 Additional Charging HP Bars + Restores 100% Enemy Energy",
     description:
-      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 charging HP bars (50 HP each) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 bars are broken first.",
+      "Usable once every 4 turns when Theridine is under 50% total HP (<=8 bars left). Enters charging state: grants 7 additional charging HP bars (100 HP each, separate from usual HP) and restores 100% of all enemies' Energy. Acts passively after 7 enemy turns to unleash 'For One is Holy' unless all 7 charging bars are broken first.",
     canUse({ attacker }) {
       const barsLeft = attacker.customCounters.hpBarsRemaining ?? 16;
       const maxBars = attacker.customCounters.maxHpBars ?? 16;
@@ -1229,14 +1229,19 @@ export const SKILL_LIST = [
       return { allowed: true };
     },
     execute({ attacker, engine }) {
+      const barHp = attacker.effectiveMaxHp || 100;
       attacker.customCounters.chargingBarsRemaining = 7;
+      attacker.customCounters.maxChargingBars = 7;
+      attacker.customCounters.chargingBarMaxHp = barHp;
+      attacker.customCounters.chargingCurrentHp = barHp;
       attacker.customCounters.chargingReactionsLeft = 7;
       engine.getLivingEnemiesOf(attacker).forEach((enemy) => {
         enemy.currentEnergy = enemy.maxEnergy;
       });
       engine.log(
-        `[${attacker.name}] invokes IM ANFANG WAR DIE TAT: gained 7 Sacred Charging Bars and restored 100% Energy to all heroes. Break all 7 bars before 7 enemy actions to stop 'For One is Holy'.`,
-        "special"
+        `[${attacker.name}] invokes IM ANFANG WAR DIE TAT: gained 7 additional Sacred Charging Bars (${barHp} HP each) and restored 100% Energy to all heroes. Break all 7 bars before 7 enemy actions to stop 'For One is Holy'.`,
+        "special",
+        { isSkill: true }
       );
     },
   },
