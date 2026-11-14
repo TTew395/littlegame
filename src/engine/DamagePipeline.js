@@ -123,6 +123,11 @@ export class DamagePipeline {
       rawDamage = atkStats.atk || 1;
     }
 
+    // Concealment of Faith reactive To Secure deals 50% of normal damage
+    if (skill._concealmentHalfDamage) {
+      rawDamage *= 0.5;
+    }
+
     // Cap skills that scale off ENEMY MAX HP against Almighty Immunity bosses (e.g. For One is Holy)
     if (
       this.engine.hasAbilityFlag(target, "capEnemyMaxHpScalingPct") &&
@@ -202,6 +207,15 @@ export class DamagePipeline {
 
     // 4. Defense Mitigation (Supports positive DEF reduction and negative DEF amplification)
     let clampedIgnoreDef = Math.max(0, Math.min(1, ignoreDefPct));
+
+    // Gabriel, Apostate of Hate's Hatred Incarnate: when attacking enemies under [Leech], deals True Damage (ignores 100% DEF & mitigation)
+    const isTrueDmgAgainstLeech =
+      Boolean(target) &&
+      this.engine.hasAbilityFlag(attacker, "trueDamageAgainstLeech") &&
+      this.engine.statusManager.hasStatus(target, "leech");
+    if (isTrueDmgAgainstLeech) {
+      clampedIgnoreDef = 1.0;
+    }
 
     // Linda-034's Pinpoint Accuracy: hits ignore 20% DEF of targets with lower ATK
     if (target && this.engine.hasAbilityFlag(attacker, "ignoreDefAgainstLowerAtk")) {
@@ -294,8 +308,8 @@ export class DamagePipeline {
       finalDamage *= 1.1;
     }
 
-    // 6. Buff / Passive / Species / Item damage reduction (Skipped if skill has bypassMitigation: true)
-    if (!skill.bypassMitigation) {
+    // 6. Buff / Passive / Species / Item damage reduction (Skipped if skill has bypassMitigation: true or True Damage vs Leech)
+    if (!skill.bypassMitigation && !isTrueDmgAgainstLeech) {
       const tgtPassivesBlocked = this.engine.statusManager.hasFlag(
         target,
         "blockPassives"

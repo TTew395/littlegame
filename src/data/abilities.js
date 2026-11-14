@@ -687,6 +687,92 @@ export const ABILITY_LIST = [
     description:
       "This Champion cannot receive critical hits from enemies whose ATK is lower than this Champion's. This Champion's hits will ignore 20% DEF of each target whose ATK is lower than this Champion's. Heals this Champion by 25% of damage inflicted. Whenever this Champion attacks or counterattacks, all John-117s, Fred-104s and Kelly-087s will join in with their basic skill.",
   },
+  {
+    id: "hatred_incarnate",
+    name: "Hatred Incarnate",
+    flags: {
+      healOnDamageDealtPct: 0.1,
+      trueDamageAgainstLeech: true,
+    },
+    description:
+      "Heals by 10% of damage dealt when attacking. When attacking enemies under a [Leech] debuff, will deal True Damage.",
+  },
+  {
+    id: "isolated_lunacy",
+    name: "Isolated Lunacy",
+    description:
+      "When attacked, increases this character's DEF by 5% (up to 100%).",
+    onBattleStart({ unit }) {
+      unit.customCounters.isolatedLunacyBonusPct = 0;
+    },
+    modifyStats({ unit, stats }) {
+      const bonus = Math.min(1.0, unit.customCounters?.isolatedLunacyBonusPct || 0);
+      if (bonus > 0) {
+        stats.def = Math.round(stats.def * (1 + bonus) * 10) / 10;
+      }
+    },
+    onAfterSkillAttacked({ defender, engine }) {
+      if (defender.currentHp <= 0) return;
+      const prev = defender.customCounters?.isolatedLunacyBonusPct || 0;
+      if (prev < 1.0) {
+        const next = Math.min(1.0, Math.round((prev + 0.05) * 100) / 100);
+        defender.customCounters.isolatedLunacyBonusPct = next;
+        engine.logPassive(
+          `[${defender.name}] Isolated Lunacy increases DEF by +5% (Total: +${Math.round(next * 100)}% DEF).`
+        );
+      }
+    },
+  },
+  {
+    id: "concealment_of_faith",
+    name: "Concealment of Faith",
+    flags: {
+      concealmentOfFaith: true,
+    },
+    description:
+      "Whenever an enemy receives a buff, has a 20% chance of instantly stealing it. When an ally receives a debuff, has a 15% chance of instantly reflecting it. If this occurs, activates the To Secure skill. This will deal 50% of normal damage.",
+  },
+  {
+    id: "engineer_of_legend",
+    name: "Engineer of Legend",
+    description:
+      "For every turn taken in battle, increases the Cosmic Engineer's SPD, HP, DEF and ATK by 1%. Stacks up to 10%.",
+    onBattleStart({ unit }) {
+      unit.customCounters.engineerTurnsStacks = 0;
+    },
+    onTurnStart({ unit, engine }) {
+      const prev = unit.customCounters?.engineerTurnsStacks || 0;
+      if (prev < 10) {
+        const next = Math.min(10, prev + 1);
+        unit.customCounters.engineerTurnsStacks = next;
+        const prevMax = unit.effectiveMaxHp || unit.baseMaxHp || 80;
+        const baseEffective = Math.max(
+          1,
+          Math.floor(unit.baseMaxHp * (1 - (unit.destroyedHpPct || 0) / 100))
+        );
+        const newMax = Math.max(1, Math.round(baseEffective * (1 + 0.01 * next)));
+        const hpDelta = Math.max(0, newMax - prevMax);
+        unit.effectiveMaxHp = newMax;
+        if (unit.currentHp > 0 && hpDelta > 0) {
+          unit.currentHp = Math.min(unit.effectiveMaxHp, unit.currentHp + hpDelta);
+        }
+        engine.logPassive(
+          `[${unit.name}] Engineer of Legend: +${next}% SPD, HP, DEF and ATK (${next}/10).`
+        );
+      }
+    },
+    modifyStats({ unit, stats }) {
+      const stacks = Math.min(10, unit.customCounters?.engineerTurnsStacks || 0);
+      if (stacks > 0) {
+        const mult = 1 + 0.01 * stacks;
+        stats.spd = Math.round(stats.spd * mult);
+        stats.def = Math.round(stats.def * mult * 10) / 10;
+        stats.atk = Math.round(stats.atk * mult * 10) / 10;
+        stats.hp = Math.round(stats.hp * mult);
+        stats.maxHp = stats.hp;
+      }
+    },
+  },
 ];
 
 export function registerAllAbilities() {

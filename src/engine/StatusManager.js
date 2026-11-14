@@ -70,12 +70,31 @@ export class StatusManager {
       bypassImmunity = false,
       silent = false,
       isReflected = false,
+      isStolen = false,
     } = {}
   ) {
     if (!target || target.currentHp <= 0) return false;
     const def = Registry.getStatus(statusId);
     if (!def) return false;
     if (target._justRevivedProtectThisSkill && def.category === "debuff") {
+      return false;
+    }
+
+    // Block Buffs check for incoming positive buffs
+    if (
+      def.category === "buff" &&
+      !bypassImmunity &&
+      !isProtected &&
+      !def.isProtectedByDefault &&
+      this.hasFlag(target, "blockBuffs")
+    ) {
+      if (!silent) {
+        this.engine.log(
+          `${target.name}'s [Block Buffs] blocked [${def.name}].`,
+          "info",
+          { isSkill: false }
+        );
+      }
       return false;
     }
 
@@ -163,6 +182,39 @@ export class StatusManager {
             isReflected: true,
           });
         });
+      }
+
+      // The Administrator's Concealment of Faith: when an ally receives a debuff, 15% chance of instantly reflecting it and activating To Secure (50% DMG)
+      if (
+        !isReflected &&
+        !isProtected &&
+        !def.isProtectedByDefault &&
+        source &&
+        source.teamId !== target.teamId &&
+        !this.engine._inConcealmentOfFaith
+      ) {
+        const allyAdmins = this.engine
+          .getLivingAlliesOf(target)
+          .filter((u) => this.engine.hasAbilityFlag(u, "concealmentOfFaith"));
+        for (const admin of allyAdmins) {
+          if (this.engine.rng() < 0.15) {
+            return this.engine.withLogStage(3, () => {
+              this.engine.logPassive(
+                `[${admin.name}] Concealment of Faith reflects [${def.name}] from ${target.name} onto ${source.name} and activates [To Secure] (50% DMG)!`
+              );
+              const reflected = this.applyStatus(target, source, statusId, {
+                duration,
+                stacks,
+                isProtected,
+                bypassImmunity,
+                silent,
+                isReflected: true,
+              });
+              this.engine.triggerConcealmentToSecure(admin, source);
+              return reflected;
+            });
+          }
+        }
       }
     }
 
@@ -277,6 +329,29 @@ export class StatusManager {
       this.engine.withLogStage(3, () => {
         this.engine.triggerSolarNovaReaction(target, `${target.name}'s [${def.name}] buff`);
       });
+
+      // The Administrator's Concealment of Faith: whenever an enemy receives a buff, 20% chance of instantly stealing it and activating To Secure (50% DMG)
+      if (
+        !isStolen &&
+        !protectedFlag &&
+        !this.engine._inConcealmentOfFaith
+      ) {
+        const opposingAdmins = this.engine
+          .getLivingEnemiesOf(target)
+          .filter((u) => this.engine.hasAbilityFlag(u, "concealmentOfFaith"));
+        for (const admin of opposingAdmins) {
+          if (this.hasStatus(target, statusId) && this.engine.rng() < 0.2) {
+            this.engine.withLogStage(3, () => {
+              this.engine.logPassive(
+                `[${admin.name}] Concealment of Faith instantly steals [${def.name}] from ${target.name} and activates [To Secure] (50% DMG)!`
+              );
+              this.stealBuffs(admin, target, { onlyIds: [statusId], silent: true });
+              this.engine.triggerConcealmentToSecure(admin, target);
+            });
+            break;
+          }
+        }
+      }
     }
 
     return true;
@@ -440,6 +515,7 @@ export class StatusManager {
         stacks: b.stacks || 1,
         isProtected: Boolean(b.isProtected),
         silent: true,
+        isStolen: true,
       });
     }
 

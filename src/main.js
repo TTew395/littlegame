@@ -2,10 +2,10 @@
  * Main Application & UI Controller (Emoji-free + Command Hub + Team Builder + Condensed Logs)
  */
 
-import { initializeGameContent } from "./data/index.js?v=15";
+import { initializeGameContent } from "./data/index.js?v=16";
 import { Registry } from "./engine/Registry.js";
-import { BattleEngine } from "./engine/BattleEngine.js?v=15";
-import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=15";
+import { BattleEngine } from "./engine/BattleEngine.js?v=16";
+import { P2PNetworkManager } from "./network/P2PNetworkManager.js?v=16";
 
 initializeGameContent();
 
@@ -73,6 +73,14 @@ export const BOSS_ENCOUNTERS = [
     recommended: "5 Characters Recommended",
     summary: "Godspawn (50 HP x 16 Bars), Communal Shields, 7-Bar Im Anfang War die Tat.",
     enemyTeam: [{ characterId: "theridine_great_septimus" }],
+  },
+  {
+    id: "raid_gabriel",
+    bossId: "gabriel_apostate_of_hate",
+    name: "Gabriel, Apostate of Hate",
+    recommended: "5 Characters Recommended",
+    summary: "Hatred Incarnate (10% Lifesteal + True DMG vs Leech), Vessel of Hate -> God's Pure Force.",
+    enemyTeam: [{ characterId: "gabriel_apostate_of_hate" }],
   },
 ];
 
@@ -899,9 +907,19 @@ class GameApp {
         );
       }
     }
-    if (unit.templateId === "antikhonor_broken_god") {
+    if (unit.templateId === "antikhonor_broken_god" || unit.templateId === "gabriel_apostate_of_hate") {
       badges.push(
         `<span class="mechanic-badge">Skills Used: ${unit.skillsUsedCount || 0}/3</span>`
+      );
+    }
+    if (unit.templateId === "mathicus_tempest" && (c.isolatedLunacyBonusPct || 0) > 0) {
+      badges.push(
+        `<span class="mechanic-badge">Isolated Lunacy: +${Math.round(c.isolatedLunacyBonusPct * 100)}% DEF</span>`
+      );
+    }
+    if (unit.templateId === "cosmic_engineer" && (c.engineerTurnsStacks || 0) > 0) {
+      badges.push(
+        `<span class="mechanic-badge">Engineer of Legend: +${c.engineerTurnsStacks}% Stats (${c.engineerTurnsStacks}/10)</span>`
       );
     }
     if (unit.templateId === "predator") {

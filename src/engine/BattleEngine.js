@@ -7,8 +7,8 @@
  */
 
 import { Registry } from "./Registry.js";
-import { StatusManager } from "./StatusManager.js?v=15";
-import { DamagePipeline } from "./DamagePipeline.js?v=15";
+import { StatusManager } from "./StatusManager.js?v=16";
+import { DamagePipeline } from "./DamagePipeline.js?v=16";
 
 function createSeededRng(seed = Date.now()) {
   let a = seed >>> 0;
@@ -431,6 +431,13 @@ export class BattleEngine {
         1,
         Math.floor(unit.baseMaxHp * (1 - unit.destroyedHpPct / 100))
       );
+      if (unit.customCounters?.engineerTurnsStacks) {
+        const stacks = Math.min(10, unit.customCounters.engineerTurnsStacks);
+        unit.effectiveMaxHp = Math.max(
+          1,
+          Math.round(unit.effectiveMaxHp * (1 + 0.01 * stacks))
+        );
+      }
       if (unit.currentHp > unit.effectiveMaxHp) {
         unit.currentHp = unit.effectiveMaxHp;
       }
@@ -571,6 +578,39 @@ export class BattleEngine {
           this._inSolarNovaCounter = false;
         }
       }
+    }
+  }
+
+  triggerConcealmentToSecure(admin, targetUnit) {
+    if (!admin || admin.currentHp <= 0 || this._inConcealmentOfFaith || this.winnerTeam) return;
+    const tgt =
+      targetUnit && targetUnit.currentHp > 0 && targetUnit.teamId !== admin.teamId
+        ? targetUnit
+        : this.getLivingEnemiesOf(admin)[0];
+    if (!tgt) return;
+
+    const runConcealmentCounter = () => {
+      if (admin.currentHp <= 0 || tgt.currentHp <= 0 || this.winnerTeam) return;
+      const baseSkill = Registry.getSkill("to_secure");
+      if (!baseSkill) return;
+      const halfDmgSkill = { ...baseSkill, _concealmentHalfDamage: true };
+      this._inConcealmentOfFaith = true;
+      try {
+        this.runSkillResolution(admin, halfDmgSkill, tgt.id, { isFreeCounter: true });
+        this.syncUnitActiveMoves(admin);
+      } finally {
+        this._inConcealmentOfFaith = false;
+      }
+    };
+
+    const frame = this.currentResolutionFrame();
+    if (frame && (frame.phase === "attack" || frame.phase === "passive")) {
+      this.queueFollowUpAttack(runConcealmentCounter, {
+        category: "counterattack",
+        dedupKey: `concealment:${admin.id}:${tgt.id}:${this.turnNumber}`,
+      });
+    } else {
+      runConcealmentCounter();
     }
   }
 
@@ -915,7 +955,7 @@ export class BattleEngine {
     }
 
     this.withLogStage(3, () => {
-      // Linda-034 Pinpoint Accuracy Lifesteal (25% damage healed) — aggregated per target when in multi-hit loop
+      // Ability Lifesteal (Pinpoint Accuracy 25% / Hatred Incarnate 10%) — aggregated per target when in multi-hit loop
       if (
         !target._inSkillHitLoop &&
         attacker &&
@@ -923,8 +963,12 @@ export class BattleEngine {
         this.hasAbilityFlag(attacker, "healOnDamageDealtPct")
       ) {
         const pct = this.getAbilityFlagValue(attacker, "healOnDamageDealtPct") || 0.25;
+        const lifestealAb = this.getActiveAbilities(attacker).find(
+          (a) => a.flags && a.flags.healOnDamageDealtPct
+        );
+        const abName = lifestealAb?.name || "Lifesteal";
         const lifesteal = Math.max(1, Math.floor(fullDamage * pct));
-        this.healUnit(attacker, lifesteal, `${attacker.name}'s Pinpoint Accuracy Lifesteal`, {
+        this.healUnit(attacker, lifesteal, `${attacker.name}'s ${abName}`, {
           isPassive: true,
         });
       }
@@ -2200,7 +2244,9 @@ export class BattleEngine {
             const bypassShieldsAndBlocks =
               Boolean(skill.bypassShieldsAndBlocks) ||
               (this.getActiveAbilities(attacker).some((a) => a.id === "lethal_lava") &&
-                this.statusManager.hasStatus(target, "hex"));
+                this.statusManager.hasStatus(target, "hex")) ||
+              (this.hasAbilityFlag(attacker, "trueDamageAgainstLeech") &&
+                this.statusManager.hasStatus(target, "leech"));
 
             for (let h = 0; h < hits; h++) {
               if (target._justRevivedProtectThisSkill || target._evadedSkillViaPassive) break;
@@ -2435,11 +2481,24 @@ export class BattleEngine {
               ) {
                 const lifestealPct =
                   this.getAbilityFlagValue(attacker, "healOnDamageDealtPct") || 0.25;
+                const lifestealAb = this.getActiveAbilities(attacker).find(
+                  (a) => a.flags && a.flags.healOnDamageDealtPct
+                );
+                const abName = lifestealAb?.name || "Lifesteal";
                 const healAmt = Math.max(1, Math.round(totalDamageToTarget * lifestealPct));
                 this.logPassive(
-                  `[${attacker.name}] [Pinpoint Accuracy] heals ${healAmt} HP from damage inflicted.`
+                  `[${attacker.name}] [${abName}] heals ${healAmt} HP from damage inflicted.`
                 );
-                this.healUnit(attacker, healAmt, "Pinpoint Accuracy");
+                this.healUnit(attacker, healAmt, abName);
+              }
+
+              if (
+                totalDamageToTarget > 0 &&
+                attacker.currentHp > 0 &&
+                this.statusManager.hasStatus(target, "leech")
+              ) {
+                const leechHeal = Math.max(1, Math.round(totalDamageToTarget * 0.18));
+                this.healUnit(attacker, leechHeal, "Leech");
               }
 
               if (totalDamageToTarget > 0 && target.currentHp > 0 && (target.shieldHp || 0) > 0) {

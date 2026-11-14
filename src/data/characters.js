@@ -481,6 +481,121 @@ export const CHARACTER_LIST = [
   },
 
   // ==========================================================
+  // PLAYABLE CHARACTERS: MATHICUS TEMPEST, THE ADMINISTRATOR, COSMIC ENGINEER
+  // ==========================================================
+  {
+    id: "mathicus_tempest",
+    name: "Mathicus Tempest",
+    title: "Isolated Lunacy",
+    avatar: "MTH",
+    role: "Defense / Support",
+    isBoss: false,
+    level: 1,
+    exp: 0,
+    maxExp: 1000,
+    rank: "Basic",
+    types: ["Earth"],
+    speciesId: "none",
+    defaultItemId: "none",
+    abilityIds: ["isolated_lunacy"],
+    stats: {
+      hp: 80,
+      energy: 120,
+      spd: 80,
+      def: 20,
+      atk: 5,
+      critRate: 15,
+      critDmg: 50,
+    },
+    forms: {
+      base: {
+        name: "Tempest Scholar",
+        avatar: "MTH",
+        moves: [
+          "staff_shot",
+          "barrier_of_knowledge",
+          "collapsing_fell",
+          "burden_free",
+        ],
+      },
+    },
+  },
+  {
+    id: "the_administrator",
+    name: "The Administrator",
+    title: "Concealment of Faith",
+    avatar: "ADM",
+    role: "Support / Control",
+    isBoss: false,
+    level: 1,
+    exp: 0,
+    maxExp: 1000,
+    rank: "Basic",
+    types: ["Earth"],
+    speciesId: "none",
+    defaultItemId: "none",
+    abilityIds: ["concealment_of_faith"],
+    stats: {
+      hp: 100,
+      energy: 120,
+      spd: 80,
+      def: 10,
+      atk: 5,
+      critRate: 15,
+      critDmg: 50,
+    },
+    forms: {
+      base: {
+        name: "Administrator",
+        avatar: "ADM",
+        moves: [
+          "to_secure",
+          "containment_and_protection",
+          "red_right_hand",
+          "laws_left_hand",
+        ],
+      },
+    },
+  },
+  {
+    id: "cosmic_engineer",
+    name: "Cosmic Engineer",
+    title: "Engineer of Legend",
+    avatar: "ENG",
+    role: "Attack / Support",
+    isBoss: false,
+    level: 1,
+    exp: 0,
+    maxExp: 1000,
+    rank: "Basic",
+    types: ["Earth"],
+    speciesId: "none",
+    defaultItemId: "none",
+    abilityIds: ["engineer_of_legend"],
+    stats: {
+      hp: 80,
+      energy: 90,
+      spd: 90,
+      def: 10,
+      atk: 10,
+      critRate: 15,
+      critDmg: 50,
+    },
+    forms: {
+      base: {
+        name: "Cosmic Engineer",
+        avatar: "ENG",
+        moves: [
+          "shotgun",
+          "rocket_barrage",
+          "scientific_prowess",
+          "weapons_of_mass_production",
+        ],
+      },
+    },
+  },
+
+  // ==========================================================
   // BOSS 1: ANTIKHONOR, BROKEN GOD
   // ==========================================================
   {
@@ -850,6 +965,48 @@ export const CHARACTER_LIST = [
           "for_one_shall_suffer",
           "im_anfang_war_die_tat",
           "for_one_is_holy",
+        ],
+      },
+    },
+  },
+
+  // ==========================================================
+  // BOSS 8: GABRIEL, APOSTATE OF HATE
+  // ==========================================================
+  {
+    id: "gabriel_apostate_of_hate",
+    name: "Gabriel, Apostate of Hate",
+    title: "Hatred Incarnate • 5 Characters Recommended",
+    avatar: "GAB",
+    role: "Raid Boss (Chaos)",
+    isBoss: true,
+    recommendedHeroes: 5,
+    level: 1,
+    exp: 0,
+    maxExp: 1000,
+    rank: "Chaos",
+    types: ["Chaos"],
+    speciesId: "none",
+    defaultItemId: "none",
+    abilityIds: ["hatred_incarnate", "almighty_immunity"],
+    stats: {
+      hp: 400,
+      energy: 100,
+      spd: 45,
+      def: 15,
+      atk: 60,
+      critRate: 15,
+      critDmg: 50,
+    },
+    forms: {
+      base: {
+        name: "Apostate of Hate",
+        avatar: "GAB",
+        moves: [
+          "bloodsoaked_cut",
+          "rain_of_damnation",
+          "vessel_of_hate",
+          "gods_pure_force",
         ],
       },
     },

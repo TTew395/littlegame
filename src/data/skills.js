@@ -2702,6 +2702,588 @@ export const SKILL_LIST = [
       }
     },
   },
+
+  // ==========================================================
+  // GABRIEL, APOSTATE OF HATE — BOSS MOVES
+  // ==========================================================
+  {
+    id: "bloodsoaked_cut",
+    name: "Bloodsoaked Cut",
+    element: "Chaos",
+    category: "Physical",
+    stab: true,
+    hits: 1,
+    energyCost: 10,
+    accuracy: 100,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "1 x ATK + [Leech] (1T)",
+    description: "Attacks one enemy. Places a [Leech] debuff for 1 turn.",
+    computeRawHit({ stats }) {
+      return 1.0 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "leech", { duration: 1 });
+      }
+    },
+  },
+  {
+    id: "rain_of_damnation",
+    name: "Rain of Damnation",
+    element: "Chaos",
+    category: "Ranged",
+    stab: true,
+    hits: 2,
+    energyCost: 40,
+    accuracy: 100,
+    targetType: "all_enemies",
+    formulaText: "+50% [Increase ATK] Self (2T) + 0.8 x ATK x 2 (AoE)",
+    description:
+      "Attacks all enemies two times. Before attacking, places a 50% [Increase ATK] on Gabriel for 2 turns.",
+    onBeforeSkill({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", { duration: 2 });
+    },
+    computeRawHit({ stats }) {
+      return 0.8 * stats.atk;
+    },
+  },
+  {
+    id: "vessel_of_hate",
+    name: "Vessel of Hate",
+    element: "Chaos",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 40,
+    accuracy: 70,
+    targetType: "all_enemies",
+    minOtherSkillsUsed: 3,
+    forcesNextSkill: "gods_pure_force",
+    formulaText:
+      "Cleanse Self + Extend Enemy Debuffs (+1T) + 0.4 x ATK (AoE) + Detonate [Leech] (5% MAX HP per turn left)",
+    description:
+      "Cannot be used unless 3 other skills have been used. Attacks all enemies. Before attacking, removes all debuffs from Gabriel and extends the duration of all debuffs on all enemies by 1 turn. After attacking, deals 5% of all enemies' MAX HP as damage for each turn of [Leech] debuff remaining on them and removes all [Leech] debuffs from all enemies. Queues God's Pure Force next.",
+    onBeforeSkill({ attacker, engine }) {
+      const removedCount = attacker.statuses.filter(
+        (s) => s.category === "debuff" && !s.isProtected
+      ).length;
+      attacker.statuses = attacker.statuses.filter(
+        (s) => s.category !== "debuff" || s.isProtected
+      );
+      if (removedCount > 0) {
+        engine.log(
+          `[Vessel of Hate] Cleansed ${removedCount} debuff(s) from ${attacker.name}.`,
+          "heal",
+          { isSkill: false }
+        );
+      }
+
+      for (const enemy of engine.getLivingEnemiesOf(attacker)) {
+        let extendedCount = 0;
+        for (const st of enemy.statuses) {
+          if (st.category === "debuff" && st.duration !== null && st.duration > 0) {
+            st.duration += 1;
+            extendedCount += 1;
+          }
+        }
+        if (extendedCount > 0) {
+          engine.log(
+            `[Vessel of Hate] Extended ${extendedCount} debuff(s) on ${enemy.name} by +1 turn.`,
+            "status",
+            { isSkill: false }
+          );
+        }
+      }
+    },
+    computeRawHit({ stats }) {
+      return 0.4 * stats.atk;
+    },
+    onAfterSkill({ attacker, engine }) {
+      for (const enemy of engine.getLivingEnemiesOf(attacker)) {
+        if (enemy.currentHp <= 0) continue;
+        const leechSt = enemy.statuses.find((s) => s.id === "leech");
+        if (leechSt) {
+          const turnsLeft = Math.max(1, leechSt.duration || 1);
+          let pct = 0.05 * turnsLeft;
+          if (engine.hasAbilityFlag(enemy, "capEnemyMaxHpScalingPct")) {
+            pct = Math.min(pct, 0.1);
+          }
+          const detonateDmg = Math.max(1, Math.floor(enemy.effectiveMaxHp * pct));
+          engine.statusManager.removeStatus(enemy, "leech", { forceProtected: true });
+          engine.dealTrueDamage(
+            enemy,
+            detonateDmg,
+            `Vessel of Hate ([Leech] ${turnsLeft}T Detonation)`
+          );
+        }
+      }
+    },
+  },
+  {
+    id: "gods_pure_force",
+    name: "God's Pure Force",
+    element: "Chaos",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 80,
+    accuracy: 100,
+    undodgeable: true,
+    targetType: "single_enemy",
+    formulaText: "1 x ATK (Undodgeable • Kill -> [Block Revive])",
+    description:
+      "Attacks one enemy (Undodgeable). Characters killed by this skill cannot be revived.",
+    computeRawHit({ stats }) {
+      return 1.0 * stats.atk;
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp <= 0) {
+        target.blockRevive = true;
+        engine.statusManager.applyStatus(attacker, target, "block_revive", {
+          isProtected: true,
+        });
+      }
+    },
+    onTargetKilled({ attacker, target, engine }) {
+      target.blockRevive = true;
+      engine.statusManager.applyStatus(attacker, target, "block_revive", {
+        isProtected: true,
+      });
+    },
+  },
+
+  // ==========================================================
+  // MATHICUS TEMPEST MOVES
+  // ==========================================================
+  {
+    id: "staff_shot",
+    name: "Staff-Shot",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 2,
+    energyCost: 15,
+    accuracy: 60,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "0.8 x DEF x 2",
+    description: "Attacks one enemy 2 times.",
+    computeRawHit({ stats }) {
+      return 0.8 * Math.max(1, stats.def);
+    },
+  },
+  {
+    id: "barrier_of_knowledge",
+    name: "Barrier of Knowledge",
+    element: "Earth",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 25,
+    accuracy: null,
+    targetType: "all_enemies",
+    formulaText: "0.5 x DEF (AoE) • [-ATK (50%)] (2T) • Grow Ally Shields +(3 x DEF)%",
+    description:
+      "Attacks all enemies. Places a 50% [Decrease ATK] debuff on all enemies for 2 turns. Also applies a Grow Shield effect, increasing the value of all [Shield] or [Magma Shield] buffs on all allies by +(3 x DEF)%.",
+    computeRawHit({ stats }) {
+      return 0.5 * Math.max(1, stats.def);
+    },
+    onEachHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "atk_down", { duration: 2 });
+      }
+    },
+    onAfterSkill({ attacker, engine }) {
+      const defVal = Math.max(0, engine.getEffectiveStats(attacker).def);
+      const growthPct = (3 * defVal) / 100;
+      if (growthPct <= 0) return;
+
+      for (const ally of engine.getLivingAlliesOf(attacker)) {
+        if ((ally.shieldHp || 0) > 0) {
+          const oldVal = ally.shieldHp;
+          ally.shieldHp = Math.max(oldVal, Math.round(oldVal * (1 + growthPct)));
+          const gained = ally.shieldHp - oldVal;
+          if (gained > 0) {
+            engine.log(
+              `[Grow Shield] ${ally.name}'s [Shield] increased by +${gained} (+${Math.round(growthPct * 100)}%) -> ${ally.shieldHp}.`,
+              "heal",
+              { isSkill: false }
+            );
+          }
+        }
+        if ((ally.magmaShieldHp || 0) > 0) {
+          const oldMagma = ally.magmaShieldHp;
+          ally.magmaShieldHp = Math.max(
+            oldMagma,
+            Math.round(oldMagma * (1 + growthPct))
+          );
+          const gainedMagma = ally.magmaShieldHp - oldMagma;
+          if (gainedMagma > 0) {
+            engine.log(
+              `[Grow Shield] ${ally.name}'s [Magma Shield] increased by +${gainedMagma} (+${Math.round(growthPct * 100)}%) -> ${ally.magmaShieldHp}.`,
+              "heal",
+              { isSkill: false }
+            );
+          }
+        }
+      }
+    },
+  },
+  {
+    id: "collapsing_fell",
+    name: "Collapsing Fell",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 90,
+    accuracy: 80,
+    targetType: "single_enemy",
+    formulaText: "1 x DEF + [Stun] (1T)",
+    description: "Attacks one enemy. Places a [Stun] debuff for 1 turn.",
+    computeRawHit({ stats }) {
+      return 1.0 * Math.max(1, stats.def);
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0) {
+        engine.statusManager.applyStatus(attacker, target, "stun", { duration: 1 });
+      }
+    },
+  },
+  {
+    id: "burden_free",
+    name: "Burden-Free",
+    element: "Fighting",
+    category: "Status",
+    stab: false,
+    energyCost: 40,
+    accuracy: null,
+    targetType: "all_allies",
+    formulaText: "Removes 1 Random Debuff from All Allies",
+    description: "Removes one random debuff from all allies.",
+    execute({ attacker, engine }) {
+      engine.log(
+        `[Burden-Free] ${attacker.name} purges one random debuff from all allies!`,
+        "heal",
+        { isSkill: true }
+      );
+      for (const ally of engine.getLivingAlliesOf(attacker)) {
+        const removable = ally.statuses.filter(
+          (s) => s.category === "debuff" && !s.isProtected
+        );
+        if (removable.length > 0) {
+          const picked = removable[Math.floor(engine.rng() * removable.length)];
+          const idx = ally.statuses.indexOf(picked);
+          if (idx !== -1) {
+            ally.statuses.splice(idx, 1);
+            engine.log(
+              `Removed [${picked.name}] from ${ally.name}.`,
+              "heal",
+              { isSkill: false }
+            );
+          }
+        }
+      }
+    },
+  },
+
+  // ==========================================================
+  // THE ADMINISTRATOR MOVES
+  // ==========================================================
+  {
+    id: "to_secure",
+    name: "To Secure",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 15,
+    accuracy: 70,
+    isBasicMove: true,
+    targetType: "single_enemy",
+    formulaText: "0.8 x ATK (50% [Block Buffs] 1T)",
+    description:
+      "Attacks one enemy. Has a 50% chance of placing a [Block Buffs] debuff for 1 turn.",
+    computeRawHit({ stats }) {
+      return 0.8 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && engine.rng() <= 0.5) {
+        engine.statusManager.applyStatus(attacker, target, "block_buffs", {
+          duration: 1,
+        });
+      }
+    },
+  },
+  {
+    id: "containment_and_protection",
+    name: "Containment and Protection",
+    element: "Earth",
+    category: "Ranged",
+    stab: true,
+    energyCost: 40,
+    accuracy: 60,
+    targetType: "all_enemies",
+    formulaText:
+      "Cleanse All Allies + [Block Debuffs] Allies (2T) + [Seal] Enemies (1T)",
+    description:
+      "Removes all debuffs from all allies. Places a [Block Debuffs] buff on all allies for 2 turns. Then, places a [Seal] debuff on all enemies for 1 turn.",
+    execute({ attacker, targets, engine }) {
+      engine.log(
+        `[Containment and Protection] ${attacker.name} cleanses and shields all allies with [Block Debuffs] (2T) and seals enemies!`,
+        "special",
+        { isSkill: true }
+      );
+      for (const ally of engine.getLivingAlliesOf(attacker)) {
+        const hadDebuffs = ally.statuses.some(
+          (s) => s.category === "debuff" && !s.isProtected
+        );
+        ally.statuses = ally.statuses.filter(
+          (s) => s.category !== "debuff" || s.isProtected
+        );
+        if (hadDebuffs) {
+          engine.log(`Removed all debuffs from ${ally.name}.`, "heal", {
+            isSkill: false,
+          });
+        }
+        engine.statusManager.applyStatus(attacker, ally, "block_debuffs", {
+          duration: 2,
+        });
+      }
+
+      const accBonus = engine.getEffectiveStats(attacker).accuracyBonus || 0;
+      const blindPenalty = engine.statusManager.hasStatus(attacker, "blindness")
+        ? -20
+        : 0;
+      const effectiveAcc = Math.max(5, Math.min(100, 60 + accBonus + blindPenalty));
+      const enemyTargets =
+        targets && targets.length > 0
+          ? targets
+          : engine.getLivingEnemiesOf(attacker);
+
+      for (const enemy of enemyTargets) {
+        if (enemy.currentHp <= 0) continue;
+        if (engine.rng() * 100 <= effectiveAcc) {
+          engine.statusManager.applyStatus(attacker, enemy, "seal", {
+            duration: 1,
+          });
+        } else {
+          engine.log(
+            `Containment and Protection missed [Seal] on ${enemy.name}.`,
+            "info",
+            { isSkill: false }
+          );
+        }
+      }
+    },
+  },
+  {
+    id: "red_right_hand",
+    name: "Red Right Hand",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    energyCost: 90,
+    accuracy: null,
+    targetType: "single_enemy",
+    formulaText:
+      "[+50% ATK] & [+60% DEF] All Allies (2T) + Full Squad Team-Up Attack",
+    description:
+      "Places a 50% [Increase ATK] and 60% [Increase DEF] buff on all allies for 2 turns. Then, teams up with all allies to attack one enemy. The allies joining in will use their default skills.",
+    execute({ attacker, targets, engine }) {
+      const target =
+        (targets && targets[0] && targets[0].currentHp > 0
+          ? targets[0]
+          : null) || engine.getLivingEnemiesOf(attacker)[0];
+      const allies = engine.getLivingAlliesOf(attacker);
+
+      engine.log(
+        `[Red Right Hand] ${attacker.name} grants [+ATK] & [+DEF] (2T) to all allies and commands a joint strike${target ? ` on ${target.name}` : ""}!`,
+        "special",
+        { isSkill: true }
+      );
+
+      for (const ally of allies) {
+        engine.statusManager.applyStatus(attacker, ally, "atk_up", {
+          duration: 2,
+        });
+        engine.statusManager.applyStatus(attacker, ally, "def_up", {
+          duration: 2,
+        });
+      }
+
+      if (target) {
+        for (const ally of allies) {
+          if (ally.isActionlessTotem || ally.currentHp <= 0) continue;
+          const basicMoveId = ally.activeMoveIds?.[0];
+          if (basicMoveId) {
+            engine.executeAllySkill(ally, basicMoveId, target.id);
+          }
+        }
+      }
+    },
+  },
+  {
+    id: "laws_left_hand",
+    name: "Law's Left Hand",
+    element: "Fighting",
+    category: "Status",
+    stab: false,
+    energyCost: 90,
+    accuracy: 80,
+    targetType: "all_enemies",
+    formulaText: "[-50% ATK] & [-60% DEF] All Enemies (2T)",
+    description:
+      "Places a 50% [Decrease ATK] and 60% [Decrease DEF] debuff on all enemies for 2 turns.",
+    execute({ attacker, targets, engine }) {
+      const accBonus = engine.getEffectiveStats(attacker).accuracyBonus || 0;
+      const blindPenalty = engine.statusManager.hasStatus(attacker, "blindness")
+        ? -20
+        : 0;
+      const effectiveAcc = Math.max(5, Math.min(100, 80 + accBonus + blindPenalty));
+      const enemyTargets =
+        targets && targets.length > 0
+          ? targets
+          : engine.getLivingEnemiesOf(attacker);
+
+      engine.log(
+        `[Law's Left Hand] ${attacker.name} sentences all enemies with [-ATK] and [-DEF] (2T)!`,
+        "status",
+        { isSkill: true }
+      );
+
+      for (const enemy of enemyTargets) {
+        if (enemy.currentHp <= 0) continue;
+        if (engine.rng() * 100 <= effectiveAcc) {
+          engine.statusManager.applyStatus(attacker, enemy, "atk_down", {
+            duration: 2,
+          });
+          engine.statusManager.applyStatus(attacker, enemy, "def_down", {
+            duration: 2,
+          });
+        } else {
+          engine.log(`Law's Left Hand missed ${enemy.name}.`, "info", {
+            isSkill: false,
+          });
+        }
+      }
+    },
+  },
+
+  // ==========================================================
+  // COSMIC ENGINEER MOVES
+  // ==========================================================
+  {
+    id: "shotgun",
+    name: "Shotgun",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 25,
+    accuracy: 60,
+    isBasicMove: true,
+    targetType: "all_enemies",
+    formulaText: "0.8 x ATK (AoE)",
+    description: "Attacks all enemies.",
+    computeRawHit({ stats }) {
+      return 0.8 * stats.atk;
+    },
+  },
+  {
+    id: "rocket_barrage",
+    name: "Rocket Barrage",
+    element: "Earth",
+    category: "Ranged",
+    stab: true,
+    hits: 1,
+    energyCost: 40,
+    accuracy: 60,
+    targetType: "all_enemies",
+    formulaText: "1.5 x ATK (AoE • 20% [Stun] 1T)",
+    description:
+      "Attacks all enemies. Has a 20% chance of placing a [Stun] debuff for 1 turn.",
+    computeRawHit({ stats }) {
+      return 1.5 * stats.atk;
+    },
+    onAfterHit({ attacker, target, engine }) {
+      if (target.currentHp > 0 && engine.rng() <= 0.2) {
+        engine.statusManager.applyStatus(attacker, target, "stun", {
+          duration: 1,
+        });
+      }
+    },
+  },
+  {
+    id: "scientific_prowess",
+    name: "Scientific Prowess",
+    element: "Fighting",
+    category: "Ranged",
+    stab: false,
+    hits: 1,
+    energyCost: 60,
+    accuracy: 80,
+    targetType: "single_enemy",
+    formulaText:
+      "[+50% ATK] Self (2T) + 2 x ATK Primary (30% Ignore DEF) + 1 x ATK Secondary Enemies",
+    description:
+      "Places a 50% [Increase ATK] buff on this character for 2 turns. Then, attacks one enemy (ignoring 30% of target DEF), and attacks all other enemies for 50% damage.",
+    onBeforeSkill({ attacker, engine }) {
+      engine.statusManager.applyStatus(attacker, attacker, "atk_up", {
+        duration: 2,
+      });
+    },
+    getIgnoreDefPct() {
+      return 0.3;
+    },
+    computeRawHit({ stats }) {
+      return 2.0 * stats.atk;
+    },
+    onAfterSkill({ attacker, targets, engine }) {
+      const primaryTarget = targets && targets[0];
+      const otherEnemies = engine
+        .getLivingEnemiesOf(attacker)
+        .filter((e) => !primaryTarget || e.id !== primaryTarget.id);
+      for (const enemy of otherEnemies) {
+        engine.executeBonusHit({
+          attacker,
+          target: enemy,
+          element: "Fighting",
+          stab: false,
+          rawMultiplier: 1.0,
+          ignoreDefPct: 0,
+          label: "Scientific Prowess (Secondary Blast)",
+        });
+      }
+    },
+  },
+  {
+    id: "weapons_of_mass_production",
+    name: "Weapons of Mass Production",
+    element: "Fighting",
+    category: "Status",
+    stab: false,
+    energyCost: 40,
+    accuracy: null,
+    targetType: "all_allies",
+    formulaText: "[+60% DEF] All Allies (2T) + +20% Turn Meter All Allies",
+    description:
+      "Places a 60% [Increase DEF] buff on all allies for 2 turns. Then, boosts the Turn Meters of all allies by 20%.",
+    execute({ attacker, engine }) {
+      engine.log(
+        `[Weapons of Mass Production] ${attacker.name} grants [+DEF] (2T) and +20% Turn Meter to all allies!`,
+        "special",
+        { isSkill: true }
+      );
+      for (const ally of engine.getLivingAlliesOf(attacker)) {
+        engine.statusManager.applyStatus(attacker, ally, "def_up", {
+          duration: 2,
+        });
+        engine.modifyTurnMeter(ally, 0.2);
+      }
+    },
+  },
 ];
 
 export function registerAllSkills() {
